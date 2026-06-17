@@ -43,30 +43,21 @@ wevtutil qe Security "/q:*[System[(EventID=4720 or EventID=4732)]]" /c:15 /f:tex
 echo [+] ALERTA: INTENTOS DE BORRADO DE LOGS (ID 1102) >> "%REPORTE%"
 wevtutil qe Security "/q:*[System[(EventID=1102)]]" /c:5 /f:text >> "%REPORTE%"
 
-echo [+] ========================================= >> "%REPORTE%"
-echo [+]      AUDITORÍA DE ACTIVE DIRECTORY        >> "%REPORTE%"
-echo [+] ========================================= >> "%REPORTE%"
+echo ========================================= >> "%REPORTE%"
+echo       AUDITORÍA DE RELACIÓN CON DOMINIO   >> "%REPORTE%"
+echo ========================================= >> "%REPORTE%"
 
-echo [+] Roles FSMO del Dominio: >> "%REPORTE%"
-netdom query fsmo >> "%REPORTE%"
+echo [+] Dominio y Servidor de Autenticación: >> "%REPORTE%"
+systeminfo | findstr /B /C:"Domain" /C:"Logon Server" >> "%REPORTE%"
 
-echo [+] Relaciones de Confianza (Trusts): >> "%REPORTE%"
-nltest /domain_trusts >> "%REPORTE%"
+echo [+] Controlador de Dominio más cercano (NLTEST): >> "%REPORTE%"
+nltest /dsgetdc: >> "%REPORTE%" 2>&1
 
-echo [+] Miembros de Domain Admins: >> "%REPORTE%"
-net group "Domain Admins" /domain >> "%REPORTE%"
+echo [+] Miembros de Domain Admins en la Red: >> "%REPORTE%"
+net group "Domain Admins" /domain >> "%REPORTE%" 2>&1
 
-echo [+] Miembros de Enterprise Admins: >> "%REPORTE%"
-net group "Enterprise Admins" /domain >> "%REPORTE%"
-
-echo [+] Usuarios con contraseña que NUNCA expira: >> "%REPORTE%"
-dsquery user -pwdneverexpires >> "%REPORTE%"
-
-echo [+] Usuarios Inactivos (Mas de 4 semanas): >> "%REPORTE%"
-dsquery user -inactive 4 >> "%REPORTE%"
-
-echo [+] Resumen de Replicación de AD: >> "%REPORTE%"
-repadmin /replsummary >> "%REPORTE%"
+echo [+] Grupos y Usuarios con Poder de Administrador Local: >> "%REPORTE%"
+net localgroup Administrators >> "%REPORTE%"
 
 echo Reporte finalizado en el Escritorio: Reporte_CMD.txt
 pause
