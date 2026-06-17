@@ -14,10 +14,13 @@ wmic diskdrive get deviceid,model,status >> "%REPORTE%"
 echo [+] RED Y PUERTOS EN ESCUCHA (LISTENING) >> "%REPORTE%"
 netstat -nab | findstr /i "listening" >> "%REPORTE%"
 
-echo [+] CONEXIONES ESTABLECIDAS >> "%REPORTE%"
+echo [+] PUERTOS EN ESCUCHA CON NOMBRE DE PROCESO >> "%REPORTE%"
+netstat -anb | findstr /v "ESTABLISHED" >> "%REPORTE%"
+
+echo [+] TOTAL CONEXIONES ESTABLECIDAS >> "%REPORTE%"
 netstat -nab | findstr /i "established" | find /c /v "" >> "%REPORTE%"
 
-echo [+] CONEXIONES ESTABLECIDAS (ORDENADAS POR PUERTO) >> "%REPORTE%"
+echo [+] CONEXIONES ESTABLECIDAS >> "%REPORTE%"
 netstat -nab | findstr /i "established" | sort >> "%REPORTE%"
 
 echo [+] CUENTAS Y SEGURIDAD >> "%REPORTE%"
@@ -39,6 +42,31 @@ wevtutil qe Security "/q:*[System[(EventID=4720 or EventID=4732)]]" /c:15 /f:tex
 
 echo [+] ALERTA: INTENTOS DE BORRADO DE LOGS (ID 1102) >> "%REPORTE%"
 wevtutil qe Security "/q:*[System[(EventID=1102)]]" /c:5 /f:text >> "%REPORTE%"
+
+echo [+] ========================================= >> "%REPORTE%"
+echo [+]      AUDITORÍA DE ACTIVE DIRECTORY        >> "%REPORTE%"
+echo [+] ========================================= >> "%REPORTE%"
+
+echo [+] Roles FSMO del Dominio: >> "%REPORTE%"
+netdom query fsmo >> "%REPORTE%"
+
+echo [+] Relaciones de Confianza (Trusts): >> "%REPORTE%"
+nltest /domain_trusts >> "%REPORTE%"
+
+echo [+] Miembros de Domain Admins: >> "%REPORTE%"
+net group "Domain Admins" /domain >> "%REPORTE%"
+
+echo [+] Miembros de Enterprise Admins: >> "%REPORTE%"
+net group "Enterprise Admins" /domain >> "%REPORTE%"
+
+echo [+] Usuarios con contraseña que NUNCA expira: >> "%REPORTE%"
+dsquery user -pwdneverexpires >> "%REPORTE%"
+
+echo [+] Usuarios Inactivos (Mas de 4 semanas): >> "%REPORTE%"
+dsquery user -inactive 4 >> "%REPORTE%"
+
+echo [+] Resumen de Replicación de AD: >> "%REPORTE%"
+repadmin /replsummary >> "%REPORTE%"
 
 echo Reporte finalizado en el Escritorio: Reporte_CMD.txt
 pause
