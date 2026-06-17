@@ -2,20 +2,27 @@
 setlocal EnableDelayedExpansion
 goto :inicio
 
-:: --- Subrutinas (deben ir ANTES del codigo principal) ---
+:log
+echo [%time%] %~1
+>>"%LOG%" echo [%time%] %~1
+exit /b
 
 :seccion
 echo %~1
 >>"%REPORTE%" echo.
 >>"%REPORTE%" echo %~1
 >>"%REPORTE%" echo.
+call :log "OK: %~1"
 exit /b
 
 :verificar_admin
 net session >nul 2>&1
 if %errorlevel% neq 0 (
     echo [AVISO] Ejecutar como Administrador para datos completos.
+    call :log "AVISO: sin privilegios de administrador"
     timeout /t 2 >nul
+) else (
+    call :log "Privilegios de administrador confirmados"
 )
 exit /b
 
@@ -36,26 +43,24 @@ if !errorlevel! equ 0 (
 )
 exit /b
 
-:: --- Codigo principal ---
-
 :inicio
-:: =============================================================================
-::  AUDITORIA 1/3 - SISTEMA, SEGURIDAD LOCAL, DOMINIO Y SERVICIOS
-::  IMPORTANTE: Cerrar Notepad si tiene abierto el reporte antes de ejecutar
-:: =============================================================================
 title Auditoria Sistema [1/3]
 
 set "REPORTE=%TEMP%\AuditSistema_%COMPUTERNAME%_%RANDOM%.txt"
 set "REPORTE_FINAL=%USERPROFILE%\Desktop\Reporte_Sistema_CMD.txt"
+set "LOG=%USERPROFILE%\Desktop\Auditoria_Sistema_LOG.txt"
 set "FECHA=%DATE% %TIME%"
+
+del "%LOG%" >nul 2>&1
+call :log "=== INICIO AUDITORIA SISTEMA ==="
 
 call :verificar_admin
 echo [1/3] Generando reporte de SISTEMA...
-echo Escribiendo a archivo temporal, luego copia al Escritorio...
+echo Log de depuracion: %LOG%
 echo.
 
 >>"%REPORTE%" echo =========================================
->>"%REPORTE%" echo   AUDITORIA SISTEMA (1 de 3) - CMD
+>>"%REPORTE%" echo   AUDITORIA SISTEMA - modulo 1 de 3 - CMD
 >>"%REPORTE%" echo =========================================
 >>"%REPORTE%" echo Fecha: %FECHA%
 >>"%REPORTE%" echo Equipo: %COMPUTERNAME%
@@ -71,11 +76,11 @@ wmic cpu get name,numberofcores,numberoflogicalprocessors >>"%REPORTE%" 2>&1
 wmic diskdrive get deviceid,model,size,status >>"%REPORTE%" 2>&1
 wmic memorychip get capacity,speed,manufacturer >>"%REPORTE%" 2>&1
 
-call :seccion "[+] ESTADO OPERATIVO - uptime, CPU, RAM, disco"
+call :seccion "[+] ESTADO OPERATIVO - uptime CPU RAM disco"
 wmic os get caption,version,buildnumber,lastbootuptime,installdate >>"%REPORTE%" 2>&1
 wmic cpu get loadpercentage >>"%REPORTE%" 2>&1
-wmic OS get freephysicalmemory,totalvisiblememorysize >>"%REPORTE%" 2>&1
-wmic logicaldisk where "DriveType=3" get caption,freespace,size,volumename >>"%REPORTE%" 2>&1
+wmic os get freephysicalmemory,totalvisiblememorysize >>"%REPORTE%" 2>&1
+wmic logicaldisk get caption,freespace,size,volumename >>"%REPORTE%" 2>&1
 >>"%REPORTE%" echo Nota: disco con menos del 10%% libre requiere atencion.
 
 call :seccion "[+] CUENTAS LOCALES"
@@ -113,7 +118,7 @@ netsh advfirewall show allprofiles >>"%REPORTE%" 2>&1
 call :seccion "[+] REGLAS DE FIREWALL ENTRANTES PERMITIDAS"
 netsh advfirewall firewall show rule name=all dir=in action=allow enable=yes >>"%REPORTE%" 2>&1
 
-call :seccion "[+] CONFIGURACION RDP, SMB, WINRM Y UAC"
+call :seccion "[+] CONFIGURACION RDP SMB WINRM Y UAC"
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections >>"%REPORTE%" 2>&1
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v PortNumber >>"%REPORTE%" 2>&1
 reg query "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v RequireSecuritySignature >>"%REPORTE%" 2>&1
@@ -165,14 +170,9 @@ wmic startup get caption,command,location,user >>"%REPORTE%" 2>&1
 
 call :seccion "[+] SERVICIOS DE APLICACIONES DE TERCEROS"
 wmic service where "StartMode='Auto' and State='Running'" get name,displayname,pathname,startname >>"%REPORTE%" 2>&1
-wmic service where "PathName like '%%Program%%' OR PathName like '%%AppData%%'" get name,displayname,pathname,startname,state >>"%REPORTE%" 2>&1
 
 call :seccion "[+] DRIVERS INSTALADOS"
 driverquery /fo list /v >>"%REPORTE%" 2>&1
-
-:: Descomentar si se requiere inventario MSI - tarda varios minutos
-:: call :seccion "[+] INVENTARIO DE SOFTWARE INSTALADO"
-:: wmic product get name,version,vendor,installdate >>"%REPORTE%" 2>&1
 
 call :seccion "[+] ALMACEN DE CERTIFICADOS"
 certutil -store MY >>"%REPORTE%" 2>&1
@@ -221,18 +221,26 @@ call :resumen_sistema
 
 >>"%REPORTE%" echo.
 >>"%REPORTE%" echo =========================================
->>"%REPORTE%" echo     FIN REPORTE SISTEMA (1/3)
+>>"%REPORTE%" echo     FIN REPORTE SISTEMA - modulo 1 de 3
 >>"%REPORTE%" echo =========================================
 >>"%REPORTE%" echo Generado: %FECHA%
+
+call :log "=== FIN - copiando reporte al Escritorio ==="
 
 copy /y "%REPORTE%" "%REPORTE_FINAL%" >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] No se pudo copiar al Escritorio. Cierre Notepad si tiene abierto el reporte.
-    echo Reporte disponible en: %REPORTE%
+    echo Reporte temporal: %REPORTE%
+    call :log "ERROR al copiar al Escritorio"
 ) else (
     echo Listo: %REPORTE_FINAL%
+    call :log "Reporte copiado OK"
     del "%REPORTE%" >nul 2>&1
 )
 
+echo.
+echo Revise el log: %LOG%
+echo Debe mostrar ~35 lineas "OK: [+] ..."
+echo.
 if /i not "%1"=="/silent" pause
 exit /b 0
