@@ -93,13 +93,16 @@ call :seccion "[+] CONTRASENAS LOCALES"
 net accounts >>"%REPORTE%" 2>&1
 
 call :seccion "[+] CONTEXTO DE SESION ACTUAL"
-whoami /all >>"%REPORTE%" 2>&1
+>>"%REPORTE%" echo Usuario: %USERDOMAIN%\%USERNAME%
+>>"%REPORTE%" echo Equipo: %COMPUTERNAME%
+>>"%REPORTE%" echo Sesion: %SESSIONNAME%
+net user "%USERNAME%" >>"%REPORTE%" 2>&1
 
 call :seccion "[+] ESTADO DE CUENTAS LOCALES"
 wmic useraccount get name,disabled,passwordexpires,sid >>"%REPORTE%" 2>&1
 
 call :seccion "[+] CONFIGURACION DE REGISTRO DE EVENTOS"
-auditpol /get /category:* >>"%REPORTE%" 2>&1
+auditpol /get /category:^* >>"%REPORTE%" 2>&1
 
 call :seccion "[+] DIRECTIVAS DE GRUPO APLICADAS"
 gpresult /r /scope:computer >>"%REPORTE%" 2>&1
@@ -157,7 +160,7 @@ call :seccion "[+] SERVICIOS DETALLADOS"
 wmic service get name,displayname,state,startmode,pathname >>"%REPORTE%" 2>&1
 
 call :seccion "[+] PROCESOS EN EJECUCION"
-wmic process get name,processid,executablepath >>"%REPORTE%" 2>&1
+tasklist /v /fo list >>"%REPORTE%" 2>&1
 
 call :seccion "[+] TAREAS PROGRAMADAS - tabla"
 schtasks /query /fo TABLE >>"%REPORTE%" 2>&1
@@ -177,6 +180,7 @@ driverquery /fo list /v >>"%REPORTE%" 2>&1
 call :seccion "[+] ALMACEN DE CERTIFICADOS"
 certutil -store MY >>"%REPORTE%" 2>&1
 certutil -store ROOT >>"%REPORTE%" 2>&1
+
 
 >>"%REPORTE%" echo =========================================
 >>"%REPORTE%" echo       RELACION CON DOMINIO
