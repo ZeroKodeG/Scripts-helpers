@@ -6,6 +6,9 @@ echo ========================================= > "%REPORTE%"
 echo        REPORTE DE AUDITORIA (CMD)       >> "%REPORTE%"
 echo ========================================= >> "%REPORTE%"
 
+echo [+] SYSTEM INFO >> "%REPORTE%"
+systeminfo >> "%REPORTE%"
+
 echo [+] HARDWARE >> "%REPORTE%"
 wmic computersystem get manufacturer,model >> "%REPORTE%"
 wmic cpu get name >> "%REPORTE%"
