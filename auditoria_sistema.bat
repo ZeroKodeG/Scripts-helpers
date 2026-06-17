@@ -96,21 +96,9 @@ call :seccion "[+] CONTEXTO DE SESION ACTUAL"
 >>"%REPORTE%" echo Usuario: %USERDOMAIN%\%USERNAME%
 >>"%REPORTE%" echo Equipo: %COMPUTERNAME%
 >>"%REPORTE%" echo Sesion: %SESSIONNAME%
-net user "%USERNAME%" >>"%REPORTE%" 2>&1
-
-call :seccion "[+] ESTADO DE CUENTAS LOCALES"
-wmic useraccount get name,disabled,passwordexpires,sid >>"%REPORTE%" 2>&1
-
-call :seccion "[+] CONFIGURACION DE REGISTRO DE EVENTOS"
-auditpol /get /category:^* >>"%REPORTE%" 2>&1
 
 call :seccion "[+] DIRECTIVAS DE GRUPO APLICADAS"
 gpresult /r /scope:computer >>"%REPORTE%" 2>&1
-gpresult /r /scope:user >>"%REPORTE%" 2>&1
-
-call :seccion "[+] CONEXIONES SMB ACTIVAS"
-net session >>"%REPORTE%" 2>&1
-net files >>"%REPORTE%" 2>&1
 
 call :seccion "[+] RECURSOS COMPARTIDOS"
 net share >>"%REPORTE%" 2>&1
@@ -118,69 +106,21 @@ net share >>"%REPORTE%" 2>&1
 call :seccion "[+] ESTADO DEL FIREWALL"
 netsh advfirewall show allprofiles >>"%REPORTE%" 2>&1
 
-call :seccion "[+] REGLAS DE FIREWALL ENTRANTES PERMITIDAS"
-netsh advfirewall firewall show rule name=all dir=in action=allow enable=yes >>"%REPORTE%" 2>&1
-
-call :seccion "[+] CONFIGURACION RDP SMB WINRM Y UAC"
+call :seccion "[+] CONFIGURACION RDP SMB Y UAC"
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections >>"%REPORTE%" 2>&1
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v PortNumber >>"%REPORTE%" 2>&1
-reg query "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v RequireSecuritySignature >>"%REPORTE%" 2>&1
-reg query "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v EnableSecuritySignature >>"%REPORTE%" 2>&1
 reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA >>"%REPORTE%" 2>&1
-reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorAdmin >>"%REPORTE%" 2>&1
-winrm get winrm/config >>"%REPORTE%" 2>&1
+sc query TermService >>"%REPORTE%" 2>&1
+sc query WinRM >>"%REPORTE%" 2>&1
 
-call :seccion "[+] PROGRAMAS DE INICIO AUTOMATICO - REGISTRO"
-reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" >>"%REPORTE%" 2>&1
-reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" >>"%REPORTE%" 2>&1
-reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" >>"%REPORTE%" 2>&1
-reg query "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run" >>"%REPORTE%" 2>&1
-
-call :seccion "[+] CONFIGURACION SMBv1"
-reg query "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v SMB1 >>"%REPORTE%" 2>&1
-sc query lanmanserver >>"%REPORTE%" 2>&1
-
-call :seccion "[+] ACTUALIZACIONES INSTALADAS - tabla"
-wmic qfe get Description,HotFixID,InstalledOn,InstalledBy /format:table >>"%REPORTE%" 2>&1
-
-call :seccion "[+] ACTUALIZACIONES INSTALADAS - lista"
-wmic qfe get Description,HotFixID,InstalledOn,InstalledBy /format:list >>"%REPORTE%" 2>&1
-
-call :seccion "[+] ACTUALIZACIONES INSTALADAS - CSV"
-wmic qfe get Description,HotFixID,InstalledOn,InstalledBy /format:csv >>"%REPORTE%" 2>&1
-
-call :seccion "[+] VERSION DE SO Y PARCHES RECIENTES"
-wmic os get caption,version,buildnumber,csdversion >>"%REPORTE%" 2>&1
+call :seccion "[+] ACTUALIZACIONES INSTALADAS"
 wmic qfe get HotFixID,Description,InstalledOn /format:table >>"%REPORTE%" 2>&1
 
 call :seccion "[+] SERVICIOS DEL SISTEMA"
 sc query type= service state= all | findstr /i "SERVICE_NAME DISPLAY_NAME STATE" >>"%REPORTE%" 2>&1
 
-call :seccion "[+] SERVICIOS DETALLADOS"
-wmic service get name,displayname,state,startmode,pathname >>"%REPORTE%" 2>&1
-
 call :seccion "[+] PROCESOS EN EJECUCION"
-tasklist /v /fo list >>"%REPORTE%" 2>&1
-
-call :seccion "[+] TAREAS PROGRAMADAS - tabla"
-schtasks /query /fo TABLE >>"%REPORTE%" 2>&1
-
-call :seccion "[+] TAREAS PROGRAMADAS - detalle"
-schtasks /query /fo LIST /v >>"%REPORTE%" 2>&1
-
-call :seccion "[+] INICIO AUTOMATICO - CARPETA Y REGISTRO"
-wmic startup get caption,command,location,user >>"%REPORTE%" 2>&1
-
-call :seccion "[+] SERVICIOS DE APLICACIONES DE TERCEROS"
-wmic service where "StartMode='Auto' and State='Running'" get name,displayname,pathname,startname >>"%REPORTE%" 2>&1
-
-call :seccion "[+] DRIVERS INSTALADOS"
-driverquery /fo list /v >>"%REPORTE%" 2>&1
-
-call :seccion "[+] ALMACEN DE CERTIFICADOS"
-certutil -store MY >>"%REPORTE%" 2>&1
-certutil -store ROOT >>"%REPORTE%" 2>&1
-
+tasklist >>"%REPORTE%" 2>&1
 
 >>"%REPORTE%" echo =========================================
 >>"%REPORTE%" echo       RELACION CON DOMINIO
@@ -210,13 +150,6 @@ for /f "tokens=2 delims=:" %%S in ('systeminfo 2^>nul ^| findstr /i /b "Logon Se
     )
 )
 
-call :seccion "[+] Equipos visibles en el dominio"
-for /f "tokens=2 delims=:" %%D in ('systeminfo 2^>nul ^| findstr /i /b "Domain:"') do (
-    set "DOM=%%D"
-    set "DOM=!DOM: =!"
-    if not "!DOM!"=="" net view /domain:!DOM! >>"%REPORTE%" 2>&1
-)
-
 call :seccion "[+] Miembros de Domain Admins"
 net group "Domain Admins" /domain >>"%REPORTE%" 2>&1
 
@@ -244,7 +177,6 @@ if %errorlevel% neq 0 (
 
 echo.
 echo Revise el log: %LOG%
-echo Debe mostrar ~35 lineas "OK: [+] ..."
 echo.
 if /i not "%1"=="/silent" pause
 exit /b 0
