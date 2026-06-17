@@ -37,7 +37,7 @@ reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConn
 if !errorlevel! equ 0 (
     >>"%REPORTE%" echo [INFO] RDP habilitado - verificar acceso
 )
-netsh advfirewall show allprofiles state 2>nul | findstr /i "OFF" >nul
+netsh advfirewall show currentprofile state 2>nul | findstr /i "OFF" >nul
 if !errorlevel! equ 0 (
     >>"%REPORTE%" echo [AVISO] Firewall desactivado en algun perfil
 )
@@ -103,25 +103,6 @@ gpresult /r /scope:computer >>"%REPORTE%" 2>&1
 call :seccion "[+] RECURSOS COMPARTIDOS"
 net share >>"%REPORTE%" 2>&1
 
-call :seccion "[+] ESTADO DEL FIREWALL"
-netsh advfirewall show allprofiles >>"%REPORTE%" 2>&1
-
-call :seccion "[+] CONFIGURACION RDP SMB Y UAC"
-reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections >>"%REPORTE%" 2>&1
-reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v PortNumber >>"%REPORTE%" 2>&1
-reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA >>"%REPORTE%" 2>&1
-sc query TermService >>"%REPORTE%" 2>&1
-sc query WinRM >>"%REPORTE%" 2>&1
-
-call :seccion "[+] ACTUALIZACIONES INSTALADAS"
-wmic qfe get HotFixID,Description,InstalledOn /format:table >>"%REPORTE%" 2>&1
-
-call :seccion "[+] SERVICIOS DEL SISTEMA"
-sc query type= service state= all | findstr /i "SERVICE_NAME DISPLAY_NAME STATE" >>"%REPORTE%" 2>&1
-
-call :seccion "[+] PROCESOS EN EJECUCION"
-tasklist >>"%REPORTE%" 2>&1
-
 >>"%REPORTE%" echo =========================================
 >>"%REPORTE%" echo       RELACION CON DOMINIO
 >>"%REPORTE%" echo =========================================
@@ -152,6 +133,30 @@ for /f "tokens=2 delims=:" %%S in ('systeminfo 2^>nul ^| findstr /i /b "Logon Se
 
 call :seccion "[+] Miembros de Domain Admins"
 net group "Domain Admins" /domain >>"%REPORTE%" 2>&1
+
+call :seccion "[+] ESTADO DEL FIREWALL"
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile" >>"%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile" >>"%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\PublicProfile" >>"%REPORTE%" 2>&1
+
+call :seccion "[+] CONFIGURACION RDP SMB Y UAC"
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections >>"%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v PortNumber >>"%REPORTE%" 2>&1
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA >>"%REPORTE%" 2>&1
+sc query TermService >>"%REPORTE%" 2>&1
+sc query WinRM >>"%REPORTE%" 2>&1
+
+call :seccion "[+] ACTUALIZACIONES INSTALADAS"
+systeminfo | findstr /i /c:"KB" /c:"Hotfix" /c:"NAP dispositivo" >>"%REPORTE%" 2>&1
+
+call :seccion "[+] SERVICIOS DEL SISTEMA"
+sc query TermService >>"%REPORTE%" 2>&1
+sc query WinRM >>"%REPORTE%" 2>&1
+sc query LanmanServer >>"%REPORTE%" 2>&1
+sc query W3SVC >>"%REPORTE%" 2>&1
+
+call :seccion "[+] PROCESOS EN EJECUCION"
+tasklist >>"%REPORTE%" 2>&1
 
 call :seccion "[+] RESUMEN DE INDICADORES DEL SISTEMA"
 call :resumen_sistema
