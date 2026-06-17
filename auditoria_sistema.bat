@@ -13,6 +13,7 @@ echo %~1
 >>"%REPORTE%" echo %~1
 >>"%REPORTE%" echo.
 call :log "OK: %~1"
+if defined DEBUG echo       errorlevel=%errorlevel%
 exit /b
 
 :verificar_admin
@@ -37,14 +38,19 @@ reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConn
 if !errorlevel! equ 0 (
     >>"%REPORTE%" echo [INFO] RDP habilitado - verificar acceso
 )
-netsh advfirewall show currentprofile state 2>nul | findstr /i "OFF" >nul
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile" /v EnableFirewall 2>nul | findstr "0x0" >nul
 if !errorlevel! equ 0 (
-    >>"%REPORTE%" echo [AVISO] Firewall desactivado en algun perfil
+    >>"%REPORTE%" echo [AVISO] Firewall perfil estandar desactivado en registro
 )
 exit /b
 
 :inicio
 title Auditoria Sistema [1/3]
+
+set "DEBUG="
+set "MODO_SILENCIOSO=0"
+if /i "%1"=="/silent" set "MODO_SILENCIOSO=1"
+if /i "%1"=="/debug" set "DEBUG=1"
 
 set "REPORTE=%TEMP%\AuditSistema_%COMPUTERNAME%_%RANDOM%.txt"
 set "REPORTE_FINAL=%USERPROFILE%\Desktop\Reporte_Sistema_CMD.txt"
@@ -96,6 +102,31 @@ call :seccion "[+] CONTEXTO DE SESION ACTUAL"
 >>"%REPORTE%" echo Usuario: %USERDOMAIN%\%USERNAME%
 >>"%REPORTE%" echo Equipo: %COMPUTERNAME%
 >>"%REPORTE%" echo Sesion: %SESSIONNAME%
+>>"%REPORTE%" echo Version script: 2026-06-17c
+
+call :seccion "[+] ESTADO DEL FIREWALL"
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile" >>"%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile" >>"%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\PublicProfile" >>"%REPORTE%" 2>&1
+
+call :seccion "[+] CONFIGURACION RDP SMB Y UAC"
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections >>"%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v PortNumber >>"%REPORTE%" 2>&1
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA >>"%REPORTE%" 2>&1
+sc query TermService >>"%REPORTE%" 2>&1
+sc query WinRM >>"%REPORTE%" 2>&1
+
+call :seccion "[+] ACTUALIZACIONES INSTALADAS"
+systeminfo | findstr /i /c:"KB" /c:"Hotfix" >>"%REPORTE%" 2>&1
+
+call :seccion "[+] SERVICIOS DEL SISTEMA"
+sc query TermService >>"%REPORTE%" 2>&1
+sc query WinRM >>"%REPORTE%" 2>&1
+sc query LanmanServer >>"%REPORTE%" 2>&1
+sc query W3SVC >>"%REPORTE%" 2>&1
+
+call :seccion "[+] PROCESOS EN EJECUCION"
+tasklist >>"%REPORTE%" 2>&1
 
 call :seccion "[+] DIRECTIVAS DE GRUPO APLICADAS"
 gpresult /r /scope:computer >>"%REPORTE%" 2>&1
@@ -134,30 +165,6 @@ for /f "tokens=2 delims=:" %%S in ('systeminfo 2^>nul ^| findstr /i /b "Logon Se
 call :seccion "[+] Miembros de Domain Admins"
 net group "Domain Admins" /domain >>"%REPORTE%" 2>&1
 
-call :seccion "[+] ESTADO DEL FIREWALL"
-reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\DomainProfile" >>"%REPORTE%" 2>&1
-reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\StandardProfile" >>"%REPORTE%" 2>&1
-reg query "HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy\PublicProfile" >>"%REPORTE%" 2>&1
-
-call :seccion "[+] CONFIGURACION RDP SMB Y UAC"
-reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections >>"%REPORTE%" 2>&1
-reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v PortNumber >>"%REPORTE%" 2>&1
-reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA >>"%REPORTE%" 2>&1
-sc query TermService >>"%REPORTE%" 2>&1
-sc query WinRM >>"%REPORTE%" 2>&1
-
-call :seccion "[+] ACTUALIZACIONES INSTALADAS"
-systeminfo | findstr /i /c:"KB" /c:"Hotfix" /c:"NAP dispositivo" >>"%REPORTE%" 2>&1
-
-call :seccion "[+] SERVICIOS DEL SISTEMA"
-sc query TermService >>"%REPORTE%" 2>&1
-sc query WinRM >>"%REPORTE%" 2>&1
-sc query LanmanServer >>"%REPORTE%" 2>&1
-sc query W3SVC >>"%REPORTE%" 2>&1
-
-call :seccion "[+] PROCESOS EN EJECUCION"
-tasklist >>"%REPORTE%" 2>&1
-
 call :seccion "[+] RESUMEN DE INDICADORES DEL SISTEMA"
 call :resumen_sistema
 
@@ -177,11 +184,21 @@ if %errorlevel% neq 0 (
 ) else (
     echo Listo: %REPORTE_FINAL%
     call :log "Reporte copiado OK"
-    del "%REPORTE%" >nul 2>&1
+    if not defined DEBUG del "%REPORTE%" >nul 2>&1
+    if defined DEBUG echo [DEBUG] Reporte temporal conservado: %REPORTE%
 )
 
 echo.
 echo Revise el log: %LOG%
 echo.
-if /i not "%1"=="/silent" pause
+if defined DEBUG (
+    echo =========================================
+    echo   MODO DEBUG - la ventana no se cierra sola
+    echo =========================================
+    echo Si Kaspersky bloqueo algo, suele verse arriba como
+    echo "acceso denegado", "amenaza detectada" o el script
+    echo deja de imprimir secciones antes del final.
+    echo.
+    pause
+) else if "%MODO_SILENCIOSO%"=="0" pause
 exit /b 0
