@@ -56,6 +56,13 @@ wmic cpu get name,numberofcores,numberoflogicalprocessors >> "%REPORTE%" 2>&1
 wmic diskdrive get deviceid,model,size,status >> "%REPORTE%" 2>&1
 wmic memorychip get capacity,speed,manufacturer >> "%REPORTE%" 2>&1
 
+call :seccion "[+] SALUD DEL SISTEMA (uptime, CPU, RAM, disco)"
+wmic os get caption,version,buildnumber,lastbootuptime,installdate >> "%REPORTE%" 2>&1
+wmic cpu get loadpercentage >> "%REPORTE%" 2>&1
+wmic OS get freephysicalmemory,totalvisiblememorysize >> "%REPORTE%" 2>&1
+wmic logicaldisk where "DriveType=3" get caption,freespace,size,volumename >> "%REPORTE%" 2>&1
+echo Nota: disco con menos del 10%% libre requiere atencion. >> "%REPORTE%"
+
 :: =============================================================================
 ::  RED - CONFIGURACION
 :: =============================================================================
@@ -175,6 +182,22 @@ echo. >> "%REPORTE%"
 echo Members of Administrators Group: >> "%REPORTE%"
 net localgroup Administrators >> "%REPORTE%" 2>&1
 
+call :seccion "[+] POLITICA DE CONTRASENAS LOCAL"
+net accounts >> "%REPORTE%" 2>&1
+
+call :seccion "[+] USUARIO Y PRIVILEGIOS ACTUALES (whoami)"
+whoami /all >> "%REPORTE%" 2>&1
+
+call :seccion "[+] CUENTAS DESHABILITADAS Y CON PASSWORD SIN EXPIRAR"
+wmic useraccount get name,disabled,passwordexpires,sid >> "%REPORTE%" 2>&1
+
+call :seccion "[+] POLITICA DE AUDITORIA (auditpol)"
+auditpol /get /category:* >> "%REPORTE%" 2>&1
+
+call :seccion "[+] GROUP POLICY APLICADA (gpresult)"
+gpresult /r /scope:computer >> "%REPORTE%" 2>&1
+gpresult /r /scope:user >> "%REPORTE%" 2>&1
+
 call :seccion "[+] SESIONES SMB ENTRANTES"
 net session >> "%REPORTE%" 2>&1
 net files >> "%REPORTE%" 2>&1
@@ -188,6 +211,25 @@ netsh advfirewall show allprofiles >> "%REPORTE%" 2>&1
 call :seccion "[+] REGLAS DE FIREWALL ENTRANTES HABILITADAS (resumen)"
 netsh advfirewall firewall show rule name=all dir=in action=allow enable=yes >> "%REPORTE%" 2>&1
 
+call :seccion "[+] HARDENING - RDP, SMB, WINRM, UAC"
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections >> "%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v PortNumber >> "%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v RequireSecuritySignature >> "%REPORTE%" 2>&1
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v EnableSecuritySignature >> "%REPORTE%" 2>&1
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v EnableLUA >> "%REPORTE%" 2>&1
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v ConsentPromptBehaviorAdmin >> "%REPORTE%" 2>&1
+winrm get winrm/config >> "%REPORTE%" 2>&1
+
+call :seccion "[+] PERSISTENCIA - CLAVES RUN Y RUNONCE"
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" >> "%REPORTE%" 2>&1
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" >> "%REPORTE%" 2>&1
+reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" >> "%REPORTE%" 2>&1
+reg query "HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run" >> "%REPORTE%" 2>&1
+
+call :seccion "[+] SMBv1 (deshabilitado = recomendado)"
+reg query "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v SMB1 >> "%REPORTE%" 2>&1
+sc query lanmanserver >> "%REPORTE%" 2>&1
+
 :: =============================================================================
 ::  PARCHES Y ACTUALIZACIONES (sin PowerShell)
 :: =============================================================================
@@ -199,6 +241,12 @@ wmic qfe get Description,HotFixID,InstalledOn,InstalledBy /format:list >> "%REPO
 
 call :seccion "[+] PARCHES Y SISTEMA (formato CSV)"
 wmic qfe get Description,HotFixID,InstalledOn,InstalledBy /format:csv >> "%REPORTE%" 2>&1
+
+call :seccion "[+] VERSION DE SO Y ULTIMO PARCHE INSTALADO"
+wmic os get caption,version,buildnumber,csdversion >> "%REPORTE%" 2>&1
+echo --- Ultimos 5 parches por fecha --- >> "%REPORTE%"
+wmic qfe get HotFixID,Description,InstalledOn /format:table >> "%REPORTE%" 2>&1
+echo Nota: comparar build y fecha del ultimo parche con el catalogo de Microsoft. >> "%REPORTE%"
 
 :: =============================================================================
 ::  SERVICIOS, PROCESOS Y TAREAS
@@ -218,6 +266,18 @@ schtasks /query /fo TABLE >> "%REPORTE%" 2>&1
 call :seccion "[+] PROGRAMAS DE INICIO AUTOMATICO (WMIC)"
 wmic startup get caption,command,location,user >> "%REPORTE%" 2>&1
 
+call :seccion "[+] SERVICIOS AUTO INICIADOS FUERA DE System32 (revisar)"
+wmic service where "StartMode='Auto' and State='Running'" get name,displayname,pathname,startname >> "%REPORTE%" 2>&1
+echo --- Servicios con ruta fuera de Windows\System32 --- >> "%REPORTE%"
+wmic service where "PathName like '%%Program%%' OR PathName like '%%AppData%%' OR PathName like '%%Temp%%'" get name,displayname,pathname,startname,state >> "%REPORTE%" 2>&1
+
+call :seccion "[+] DRIVERS DEL SISTEMA"
+driverquery /fo list /v >> "%REPORTE%" 2>&1
+
+:: Tarda varios minutos en ejecutar, habilitar si se requiere
+call :seccion "[+] SOFTWARE INSTALADO (puede tardar varios minutos)"
+wmic product get name,version,vendor,installdate >> "%REPORTE%" 2>&1
+
 :: =============================================================================
 ::  LOGS DE SEGURIDAD
 :: =============================================================================
@@ -235,6 +295,36 @@ wevtutil qe Security "/q:*[System[(EventID=1102)]]" /c:5 /f:text >> "%REPORTE%" 
 
 call :seccion "[+] INICIOS DE SESION EXITOSOS RECIENTES (ID 4624)"
 wevtutil qe Security "/q:*[System[(EventID=4624)]]" /c:10 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] LOGON TIPO 10 - RDP EXITOSO (ID 4624 Task 10)"
+wevtutil qe Security "/q:*[System[(EventID=4624)]] and EventData[Data[@Name='LogonType']='10']" /c:15 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] CREDENCIALES EXPLICITAS USADAS (ID 4648)"
+wevtutil qe Security "/q:*[System[(EventID=4648)]]" /c:10 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] KERBEROS PRE-AUTH FALLIDO (ID 4771) - posible brute force"
+wevtutil qe Security "/q:*[System[(EventID=4771)]]" /c:15 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] CAMBIO EN POLITICA DE AUDITORIA (ID 4719)"
+wevtutil qe Security "/q:*[System[(EventID=4719)]]" /c:5 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] NUEVO SERVICIO INSTALADO - System log (ID 7045)"
+wevtutil qe System "/q:*[System[(EventID=7045)]]" /c:15 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] APAGADOS INESPERADOS (ID 6008) y KERNEL-POWER (ID 41)"
+wevtutil qe System "/q:*[System[(EventID=6008)]]" /c:5 /f:text >> "%REPORTE%" 2>&1
+wevtutil qe System "/q:*[System[(EventID=41)]]" /c:5 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] ERRORES CRITICOS SYSTEM (ultimas 24h)"
+wevtutil qe System "/q:*[System[(Level=1 or Level=2) and TimeCreated[timediff(@SystemTime) <= 86400000]]]" /c:20 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] ERRORES APPLICATION (ultimas 24h)"
+wevtutil qe Application "/q:*[System[(Level=1 or Level=2) and TimeCreated[timediff(@SystemTime) <= 86400000]]]" /c:20 /f:text >> "%REPORTE%" 2>&1
+
+call :seccion "[+] TAMANO Y RETENCION DE LOGS"
+wevtutil gl Security >> "%REPORTE%" 2>&1
+wevtutil gl System >> "%REPORTE%" 2>&1
+wevtutil gl Application >> "%REPORTE%" 2>&1
 
 :: =============================================================================
 ::  DOMINIO Y ACTIVE DIRECTORY
@@ -297,6 +387,16 @@ wmic nicconfig where "IPEnabled=True" get description,ipaddress,ipsubnet,default
 
 call :seccion "[+] LISTA DE PUERTOS ABIERTOS POR PROCESO (netstat resumen)"
 netstat -ano | findstr /i "LISTENING ESTABLISHED" >> "%REPORTE%"
+
+call :seccion "[+] CERTIFICADOS INSTALADOS (resumen)"
+certutil -store MY >> "%REPORTE%" 2>&1
+certutil -store ROOT >> "%REPORTE%" 2>&1
+
+call :seccion "[+] TAREAS PROGRAMADAS DETALLADAS (con comando)"
+schtasks /query /fo LIST /v >> "%REPORTE%" 2>&1
+
+call :seccion "[+] RESUMEN EJECUTIVO - INDICADORES CLAVE"
+call :resumen_ejecutivo
 
 :: =============================================================================
 ::  PIE DE REPORTE
@@ -363,4 +463,57 @@ goto :eof
 
 :parse_ip
 for /f "tokens=1-3 delims=." %%a in ("!LOCAL_IP!") do set "SUBNET_BASE=%%a.%%b.%%c"
+goto :eof
+
+:: =============================================================================
+::  Subrutina: resumen ejecutivo con alertas basicas
+:: =============================================================================
+:resumen_ejecutivo
+echo === CHECKLIST RAPIDO === >> "%REPORTE%"
+echo. >> "%REPORTE%"
+
+:: Admin check
+net session >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] Ejecutado con privilegios de Administrador >> "%REPORTE%"
+) else (
+    echo [ALERTA] NO se ejecuto como Administrador - datos incompletos >> "%REPORTE%"
+)
+
+:: RDP habilitado
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections 2>nul | findstr "0x0" >nul
+if %errorlevel% equ 0 (
+    echo [INFO] RDP parece HABILITADO - verificar acceso y NLA >> "%REPORTE%"
+) else (
+    echo [OK] RDP parece deshabilitado o no detectado >> "%REPORTE%"
+)
+
+:: Firewall deshabilitado
+netsh advfirewall show allprofiles state 2>nul | findstr /i "OFF" >nul
+if %errorlevel% equ 0 (
+    echo [ALERTA] Firewall Windows DESACTIVADO en algun perfil >> "%REPORTE%"
+) else (
+    echo [OK] Firewall Windows activo en todos los perfiles >> "%REPORTE%"
+)
+
+:: Guest habilitado
+net user guest 2>nul | findstr /i "activada yes si" >nul
+if %errorlevel% equ 0 (
+    echo [ALERTA] Cuenta Guest podria estar activa - revisar >> "%REPORTE%"
+)
+
+:: Contadores rapidos de eventos criticos
+for /f %%C in ('wevtutil qe Security "/q:*[System[(EventID=4625)]]" /c:50 /f:text 2^>nul ^| find /c "Event ID"') do (
+    echo [INFO] Logons fallidos recientes en muestra: %%C de 50 >> "%REPORTE%"
+)
+for /f %%C in ('wevtutil qe Security "/q:*[System[(EventID=1102)]]" /c:10 /f:text 2^>nul ^| find /c "Event ID"') do (
+    if %%C gtr 0 echo [CRITICO] Detectados %%C eventos de BORRADO DE LOGS ^(ID 1102^) >> "%REPORTE%"
+)
+for /f %%C in ('wevtutil qe Security "/q:*[System[(EventID=4720)]]" /c:10 /f:text 2^>nul ^| find /c "Event ID"') do (
+    if %%C gtr 0 echo [ALERTA] Detectadas %%C creaciones de cuenta nuevas ^(ID 4720^) >> "%REPORTE%"
+)
+
+echo. >> "%REPORTE%"
+echo Revisar manualmente: puertos 3389/445/5985 expuestos, servicios fuera de System32, >> "%REPORTE%"
+echo tareas programadas desconocidas, y parches mas antiguos de 60 dias. >> "%REPORTE%"
 goto :eof
