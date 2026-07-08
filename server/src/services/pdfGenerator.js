@@ -42,7 +42,8 @@ function buildOpencodeEnv(sourceEnv = process.env) {
     }
   }
   for (const [key, value] of Object.entries(sourceEnv)) {
-    if (key.startsWith("OPENCODE_") && value !== undefined) {
+    if (value === undefined) continue;
+    if (key.startsWith("OPENCODE_") || key.startsWith("BITFROST_")) {
       env[key] = value;
     }
   }
@@ -116,6 +117,7 @@ function createPdfGenerator(options = {}) {
   const db = options.db || defaultDb;
   const dataDir = options.dataDir || path.join(__dirname, "..", "..", "data");
   const promptPath = options.promptPath || path.join(__dirname, "..", "..", "prompts", "reporte_ejecutivo.txt");
+  const opencodeConfigPath = options.opencodeConfigPath || path.join(__dirname, "..", "..", "opencode.json");
   const env = buildOpencodeEnv(options.env || process.env);
   const timeoutMs = options.timeoutMs || Number(env.OPENCODE_TIMEOUT_MS) || 10 * 60 * 1000;
   const killGraceMs = options.killGraceMs || DEFAULT_KILL_GRACE_MS;
@@ -167,6 +169,10 @@ function createPdfGenerator(options = {}) {
       fs.writeFileSync(path.join(workDir, "reporte_sistema.txt"), row.reporte_sistema || "");
       fs.writeFileSync(path.join(workDir, "reporte_red.txt"), row.reporte_red || "");
       fs.writeFileSync(path.join(workDir, "reporte_logs.txt"), row.reporte_logs || "");
+
+      if (fs.existsSync(opencodeConfigPath)) {
+        fs.copyFileSync(opencodeConfigPath, path.join(workDir, "opencode.json"));
+      }
 
       const result = await runOpencode({ workDir, prompt, env, timeoutMs, killGraceMs });
       const generatedPdf = findPdf(workDir);

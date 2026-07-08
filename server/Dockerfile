@@ -15,13 +15,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 ARG OPENCODE_VERSION=latest
-RUN npm install -g opencode-ai@${OPENCODE_VERSION}
+RUN npm install -g opencode-ai@${OPENCODE_VERSION} @ai-sdk/openai-compatible
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
 COPY public ./public
 COPY prompts ./prompts
+COPY opencode.json ./opencode.json
 
 EXPOSE 3000
 

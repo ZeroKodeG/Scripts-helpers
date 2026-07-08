@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "bitfrost": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Bitfrost",
+      "options": {
+        "baseURL": "{env:BITFROST_BASE_URL}",
+        "headers": {
+          "Authorization": "Bearer {env:BITFROST_API_KEY}"
+        }
+      },
+      "models": {
+        "zerokode-auto": {
+          "name": "zerokode (Auto)",
+          "limit": {
+            "context": 200000,
+            "output": 32768
+          }
+        }
+      }
+    }
+  }
+}

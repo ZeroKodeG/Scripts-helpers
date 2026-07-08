@@ -10,7 +10,7 @@ Requiere Docker + Docker Compose. Desde la raiz del repo:
 cd server
 cp .env.example .env
 # editar .env: definir API_KEY, SESSION_SECRET, OPENCODE_MODEL,
-# OPENCODE_TIMEOUT_MS y la API key del proveedor (p.ej. OPENAI_API_KEY)
+# BITFROST_BASE_URL, BITFROST_API_KEY y OPENCODE_TIMEOUT_MS
 cd ..
 docker compose up -d --build
 ```
@@ -31,7 +31,7 @@ cd server
 npm install
 cp .env.example .env
 # editar .env: definir API_KEY, SESSION_SECRET, OPENCODE_MODEL,
-# OPENCODE_TIMEOUT_MS y la API key del proveedor (p.ej. OPENAI_API_KEY)
+# BITFROST_BASE_URL, BITFROST_API_KEY y OPENCODE_TIMEOUT_MS
 npm start
 ```
 
@@ -69,9 +69,12 @@ El dashboard permite generar un PDF ejecutivo desde cada fila con el boton `Gene
 
 Variables requeridas en `.env`:
 
-- `OPENCODE_MODEL`: modelo fijo para todas las generaciones, por ejemplo `openai/gpt-4.1` o el proveedor/modelo configurado para opencode.
+- `OPENCODE_MODEL`: modelo en formato `provider/modelo`, por ejemplo `bitfrost/zerokode-auto`.
 - `OPENCODE_TIMEOUT_MS`: timeout del proceso, por defecto `600000`.
-- API key del proveedor elegido por `OPENCODE_MODEL`, por ejemplo `OPENAI_API_KEY` o `ZHIPU_API_KEY`.
+- `BITFROST_BASE_URL`: endpoint del proveedor OpenAI-compatible (ej. `https://bf.alvesc.com/v1`).
+- `BITFROST_API_KEY`: API key del proveedor Bitfrost.
+
+La configuracion del proveedor (baseURL, paquete npm, definicion de modelos) vive en `opencode.json` versionado en el repo. Los secretos (`BITFROST_API_KEY`) y la baseURL se interpolan en runtime via `{env:VARIABLE}` — no hay secretos en el archivo. Para cambiar de endpoint o modelo, editar `.env` (baseURL/api key/modelo) y/o `opencode.json` (definicion de modelos disponibles).
 
 Antes de usarlo en produccion, reemplazar el marcador `REEMPLAZAR_PROMPT_EJECUTIVO` en `prompts/reporte_ejecutivo.txt` por el prompt final. Mientras el marcador siga presente, la generacion falla a proposito con un error visible en el dashboard.
 
