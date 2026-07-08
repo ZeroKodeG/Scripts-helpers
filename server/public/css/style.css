@@ -1,0 +1,365 @@
+/* Auditoria - hoja de estilos compartida (login + dashboard) */
+
+:root {
+  --bg: #f5f6f9;
+  --surface: #ffffff;
+  --border: #e3e6ec;
+  --text: #1b2430;
+  --text-muted: #667085;
+  --accent: #3457d5;
+  --accent-hover: #2c47b8;
+  --accent-soft: #eef1fc;
+  --ok: #1e8e5a;
+  --ok-soft: #e7f6ee;
+  --pending: #b7791f;
+  --pending-soft: #fbf3e4;
+  --danger: #c23b3b;
+  --danger-soft: #fbeaea;
+  --radius: 8px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 6px rgba(16, 24, 40, 0.06);
+  --font-sans: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Franja superior: marcador visual simple, evoca una barra de estado */
+.top-strip {
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--ok));
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 0.35rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* ---------- Layout de pagina, centrado con margenes laterales ---------- */
+
+.page-shell {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 2.5rem clamp(1rem, 4vw, 3rem) 4rem;
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.login-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+/* ---------- Login ---------- */
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 2rem;
+}
+
+.login-card h1 {
+  font-size: 1.15rem;
+  margin: 0 0 0.35rem;
+}
+
+.login-card p.hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0 0 1.5rem;
+}
+
+.field {
+  margin-bottom: 1.1rem;
+}
+
+.field label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-family: var(--font-mono);
+  background: var(--surface);
+  color: var(--text);
+}
+
+input[type="password"]:focus,
+input[type="text"]:focus,
+select:focus,
+button:focus,
+a.btn:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 0.65rem;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.alert {
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.alert-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* ---------- Dashboard ---------- */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.page-header h1 {
+  font-size: 1.35rem;
+  margin: 0;
+}
+
+.btn-ghost {
+  display: inline-block;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-ghost:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-soft);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+}
+
+.toolbar label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+thead th {
+  text-align: left;
+  padding: 0.7rem 1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+tbody td {
+  padding: 0.75rem 1rem;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover {
+  background: var(--accent-soft);
+}
+
+td.mono,
+th.mono {
+  font-family: var(--font-mono);
+}
+
+td.mono {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.actions a.btn {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.actions a.btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.badge-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.badge-ok:hover {
+  filter: brightness(0.95);
+}
+
+.badge-pending {
+  background: var(--pending-soft);
+  color: var(--pending);
+}
+
+.pdf-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.pdf-form {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.pdf-form input[type="file"] {
+  font-size: 0.75rem;
+  max-width: 190px;
+  color: var(--text-muted);
+}
+
+.pdf-form button {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.pdf-form button:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 2.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .table-card {
+    overflow-x: auto;
+  }
+
+  table {
+    min-width: 620px;
+  }
+}

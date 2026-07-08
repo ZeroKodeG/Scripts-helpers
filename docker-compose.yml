@@ -1,0 +1,13 @@
+services:
+  backend:
+    build:
+      context: ./server
+    container_name: auditoria-backend
+    restart: unless-stopped
+    environment:
+      - API_KEY=${API_KEY}
+      - PORT=${PORT}
+      - DB_PATH=${DB_PATH}
+      - SESSION_SECRET=${SESSION_SECRET}
+    volumes:
+      - ./server/data:/app/data

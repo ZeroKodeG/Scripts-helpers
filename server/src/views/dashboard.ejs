@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auditoria - Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="top-strip"></div>
+  <div class="page-shell">
+    <div class="page-header">
+      <div>
+        <p class="eyebrow">Auditoria</p>
+        <h1>Reportes de servidores</h1>
+      </div>
+      <form method="post" action="/logout">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn-ghost" type="submit">Salir</button>
+      </form>
+    </div>
+
+    <form class="toolbar" method="get" action="/dashboard">
+      <label>
+        Equipo
+        <select name="equipo" onchange="this.form.submit()">
+          <option value="">Todos</option>
+          <% equipos.forEach(function(eq) { %>
+            <option value="<%= eq %>" <%= eq === equipoFiltro ? "selected" : "" %>><%= eq %></option>
+          <% }) %>
+        </select>
+      </label>
+    </form>
+
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th class="mono">Fecha / hora</th>
+            <th class="mono">Equipo</th>
+            <th>Reportes</th>
+            <th>PDF</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% reportes.forEach(function(r) { %>
+            <tr>
+              <td class="mono"><%= r.fecha_hora %></td>
+              <td class="mono"><%= r.equipo %></td>
+              <td class="actions">
+                <a class="btn" href="/reportes/<%= r.id %>/sistema">Sistema</a>
+                <a class="btn" href="/reportes/<%= r.id %>/red">Red</a>
+                <a class="btn" href="/reportes/<%= r.id %>/logs">Logs</a>
+              </td>
+              <td>
+                <% if (r.pdf_path) { %>
+                  <a class="badge badge-ok" href="/reportes/<%= r.id %>/pdf">PDF &#10003; Descargar</a>
+                <% } else { %>
+                  <div class="pdf-pending">
+                    <span class="badge badge-pending">Pendiente</span>
+                    <form class="pdf-form" method="post" action="/reportes/<%= r.id %>/pdf" enctype="multipart/form-data">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <input type="file" name="pdf" accept="application/pdf" required>
+                      <button type="submit">Subir</button>
+                    </form>
+                  </div>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+          <% if (reportes.length === 0) { %>
+            <tr><td colspan="4" class="empty-state">Todavia no hay reportes para mostrar.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,9 @@
+server/node_modules/
+server/data/*.db
+server/data/*.db-journal
+server/data/*.db-wal
+server/data/*.db-shm
+server/data/pdfs/*
+!server/data/pdfs/.gitkeep
+server/.env
+.playwright-mcp

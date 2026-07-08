@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auditoria - Ingresar</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-shell">
+  <div class="top-strip"></div>
+  <div class="login-center">
+    <div class="login-card">
+      <p class="eyebrow">Auditoria</p>
+      <h1>Ingresar al panel</h1>
+      <p class="hint">Usa la API key del backend para ver los reportes de los equipos.</p>
+
+      <% if (error) { %>
+        <div class="alert alert-error"><%= error %></div>
+      <% } %>
+
+      <form method="post" action="/login">
+        <div class="field">
+          <label for="api_key">API Key</label>
+          <input type="password" id="api_key" name="api_key" autofocus required autocomplete="current-password">
+        </div>
+        <button class="btn-primary" type="submit">Ingresar</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
