@@ -4,10 +4,10 @@ services:
       context: ./server
     container_name: auditoria-backend
     restart: unless-stopped
+    env_file:
+      - ./server/.env
     environment:
-      - API_KEY=${API_KEY}
-      - PORT=${PORT}
-      - DB_PATH=${DB_PATH}
-      - SESSION_SECRET=${SESSION_SECRET}
+      - PORT=3000
+      - DB_PATH=./data/auditoria.db
     volumes:
       - ./server/data:/app/data

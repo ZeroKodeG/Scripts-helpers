@@ -308,6 +308,50 @@ td.mono {
   color: var(--pending);
 }
 
+.badge-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.pdf-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.inline-form {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.inline-form button,
+.link-button {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.inline-form button:hover,
+.link-button:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.link-button {
+  border: none;
+  padding-left: 0;
+  padding-right: 0;
+  color: var(--accent);
+  background: transparent;
+}
+
 .pdf-pending {
   display: flex;
   flex-direction: column;

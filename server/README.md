@@ -9,7 +9,8 @@ Requiere Docker + Docker Compose. Desde la raiz del repo:
 ```
 cd server
 cp .env.example .env
-# editar .env: definir API_KEY y SESSION_SECRET propios
+# editar .env: definir API_KEY, SESSION_SECRET, OPENCODE_MODEL,
+# OPENCODE_TIMEOUT_MS y la API key del proveedor (p.ej. OPENAI_API_KEY)
 cd ..
 docker compose up -d --build
 ```
@@ -29,7 +30,8 @@ docker compose up -d --build  # reconstruir tras cambios de codigo
 cd server
 npm install
 cp .env.example .env
-# editar .env: definir API_KEY y SESSION_SECRET propios
+# editar .env: definir API_KEY, SESSION_SECRET, OPENCODE_MODEL,
+# OPENCODE_TIMEOUT_MS y la API key del proveedor (p.ej. OPENAI_API_KEY)
 npm start
 ```
 
@@ -60,6 +62,33 @@ curl -X POST http://localhost:3000/api/reportes \
 - SQLite en `data/auditoria.db` (una fila por corrida: equipo, fecha_hora, los 3 textos de reporte, ruta del PDF si se subio).
 - PDFs subidos manualmente desde el dashboard en `data/pdfs/<id>.pdf`.
 - Ambos quedan fuera de git (ver `.gitignore` en la raiz del repo) y, con Docker, persisten en el host via el volumen `./server/data:/app/data` del `docker-compose.yml`.
+
+## Generacion automatica de PDF
+
+El dashboard permite generar un PDF ejecutivo desde cada fila con el boton `Generar PDF`. El backend encola la generacion, escribe los tres reportes en un directorio temporal y ejecuta `opencode run --auto` con el prompt versionado en `prompts/reporte_ejecutivo.txt`.
+
+Variables requeridas en `.env`:
+
+- `OPENCODE_MODEL`: modelo fijo para todas las generaciones, por ejemplo `openai/gpt-4.1` o el proveedor/modelo configurado para opencode.
+- `OPENCODE_TIMEOUT_MS`: timeout del proceso, por defecto `600000`.
+- API key del proveedor elegido por `OPENCODE_MODEL`, por ejemplo `OPENAI_API_KEY` o `ZHIPU_API_KEY`.
+
+Antes de usarlo en produccion, reemplazar el marcador `REEMPLAZAR_PROMPT_EJECUTIVO` en `prompts/reporte_ejecutivo.txt` por el prompt final. Mientras el marcador siga presente, la generacion falla a proposito con un error visible en el dashboard.
+
+El estado se guarda en SQLite:
+
+- `pendiente`: todavia no se genero PDF.
+- `generando`: opencode esta corriendo o el reporte esta en cola.
+- `listo`: existe `data/pdfs/<id>.pdf` y el dashboard muestra el link de descarga.
+- `error`: la generacion fallo y se puede reintentar desde el dashboard.
+
+## Nota de seguridad sobre opencode
+
+La generacion automatica usa `opencode run --auto`. Eso permite que opencode apruebe permisos y ejecute codigo generado por el LLM dentro del VPS.
+
+**Riesgo principal - inyeccion de prompts:** los tres reportes `.txt` llegan desde servidores remotos via la API key compartida y se entregan al LLM como parte del prompt. Un servidor comprometido puede embeber instrucciones maliciosas dentro de su reporte (prompt injection) para que el modelo ejecute codigo no deseado aprovechando los permisos del `--auto`. Este proyecto no agrega sandboxing fuerte: el directorio temporal por reporte es solo aislamiento de archivos/workspace, **no** una frontera de ejecucion; con `--auto`, el codigo que opencode ejecuta puede alcanzar todo lo que pueda el usuario del backend.
+
+Las mitigaciones actuales son un directorio temporal por reporte (aislamiento de workspace, no de ejecucion), timeout del proceso y cola con concurrencia 1. Usar esta funcion solo con prompts propios y reportes de origen confiable.
 
 ## Despliegue en VPS
 

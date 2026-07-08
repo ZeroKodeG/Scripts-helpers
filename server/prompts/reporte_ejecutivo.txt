@@ -1,0 +1,11 @@
+REEMPLAZAR_PROMPT_EJECUTIVO
+
+Este archivo debe contener el prompt final para opencode.
+
+El backend escribira estos tres archivos en el directorio de trabajo antes de llamar a opencode:
+
+- reporte_sistema.txt
+- reporte_red.txt
+- reporte_logs.txt
+
+El prompt final debe indicar que se genere un PDF ejecutivo y que el PDF quede guardado dentro del directorio de trabajo.

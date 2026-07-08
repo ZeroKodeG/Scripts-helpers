@@ -4,6 +4,7 @@ const fs = require("fs");
 const multer = require("multer");
 const db = require("../db");
 const { checkApiKey, requireSession, requireCsrf } = require("../auth");
+const { encolarGeneracion } = require("../services/pdfGenerator");
 
 const router = express.Router();
 
@@ -24,10 +25,7 @@ function sanitizeSegment(value) {
 }
 
 const pdfUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, PDF_DIR),
-    filename: (req, file, cb) => cb(null, `${req.params.id}.pdf`),
-  }),
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     cb(null, file.mimetype === "application/pdf");
   },
@@ -67,12 +65,12 @@ router.get("/dashboard", requireSession, (req, res) => {
   const reportes = equipoFiltro
     ? db
         .prepare(
-          "SELECT id, equipo, fecha_hora, pdf_path FROM reportes WHERE equipo = ? ORDER BY fecha_hora DESC"
+          "SELECT id, equipo, fecha_hora, pdf_path, pdf_status, pdf_error FROM reportes WHERE equipo = ? ORDER BY fecha_hora DESC"
         )
         .all(equipoFiltro)
     : db
         .prepare(
-          "SELECT id, equipo, fecha_hora, pdf_path FROM reportes ORDER BY fecha_hora DESC"
+          "SELECT id, equipo, fecha_hora, pdf_path, pdf_status, pdf_error FROM reportes ORDER BY fecha_hora DESC"
         )
         .all();
 
@@ -97,6 +95,17 @@ router.get("/reportes/:id/red", requireSession, descargarTxt("reporte_red", "Red
 router.get("/reportes/:id/logs", requireSession, descargarTxt("reporte_logs", "Logs"));
 
 router.post(
+  "/reportes/:id/generar-pdf",
+  express.urlencoded({ extended: false }),
+  requireSession,
+  requireCsrf,
+  (req, res) => {
+    encolarGeneracion(req.params.id);
+    res.redirect("/dashboard");
+  }
+);
+
+router.post(
   "/reportes/:id/pdf",
   requireSession,
   pdfUpload.single("pdf"),
@@ -105,7 +114,14 @@ router.post(
     if (!req.file) {
       return res.status(400).send("Archivo invalido, debe ser un PDF");
     }
-    db.prepare("UPDATE reportes SET pdf_path = ? WHERE id = ?").run(
+    const row = db.prepare("SELECT pdf_status FROM reportes WHERE id = ?").get(req.params.id);
+    if (row && row.pdf_status === "generando") {
+      return res
+        .status(409)
+        .send("PDF en generacion, espere a que termine antes de subir uno manualmente");
+    }
+    fs.writeFileSync(path.join(PDF_DIR, `${req.params.id}.pdf`), req.file.buffer);
+    db.prepare("UPDATE reportes SET pdf_path = ?, pdf_status = 'listo', pdf_error = NULL WHERE id = ?").run(
       `${req.params.id}.pdf`,
       req.params.id
     );

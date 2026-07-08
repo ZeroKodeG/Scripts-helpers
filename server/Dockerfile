@@ -14,10 +14,14 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
+ARG OPENCODE_VERSION=latest
+RUN npm install -g opencode-ai@${OPENCODE_VERSION}
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
 COPY public ./public
+COPY prompts ./prompts
 
 EXPOSE 3000
 

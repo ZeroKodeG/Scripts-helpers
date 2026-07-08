@@ -3,6 +3,7 @@ const path = require("path");
 const express = require("express");
 const session = require("express-session");
 
+const db = require("./db");
 const apiRoutes = require("./routes/api");
 const webRoutes = require("./routes/web");
 
@@ -10,6 +11,10 @@ if (!process.env.API_KEY) {
   console.error("Falta API_KEY en el entorno (.env). Copia .env.example a .env y completalo.");
   process.exit(1);
 }
+
+db.prepare(
+  "UPDATE reportes SET pdf_status = 'error', pdf_error = 'Interrumpido por reinicio del backend' WHERE pdf_status = 'generando'"
+).run();
 
 const app = express();
 

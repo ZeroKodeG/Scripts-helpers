@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Auditoria - Dashboard</title>
   <link rel="stylesheet" href="/css/style.css">
+  <% if (reportes.some(function(r) { return r.pdf_status === "generando"; })) { %>
+    <meta http-equiv="refresh" content="8">
+  <% } %>
 </head>
 <body>
   <div class="top-strip"></div>
@@ -53,11 +56,30 @@
                 <a class="btn" href="/reportes/<%= r.id %>/logs">Logs</a>
               </td>
               <td>
-                <% if (r.pdf_path) { %>
-                  <a class="badge badge-ok" href="/reportes/<%= r.id %>/pdf">PDF &#10003; Descargar</a>
+                <% if (r.pdf_status === "listo" && r.pdf_path) { %>
+                  <div class="pdf-actions">
+                    <a class="badge badge-ok" href="/reportes/<%= r.id %>/pdf">PDF &#10003; Descargar</a>
+                    <form class="inline-form" method="post" action="/reportes/<%= r.id %>/generar-pdf">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <button class="link-button" type="submit">Regenerar</button>
+                    </form>
+                  </div>
+                <% } else if (r.pdf_status === "generando") { %>
+                  <span class="badge badge-pending">Generando...</span>
+                <% } else if (r.pdf_status === "error") { %>
+                  <div class="pdf-pending">
+                    <span class="badge badge-error" title="<%= r.pdf_error || 'Error generando PDF' %>">Error: <%= (r.pdf_error || 'Error generando PDF').slice(0, 80) %></span>
+                    <form class="inline-form" method="post" action="/reportes/<%= r.id %>/generar-pdf">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <button type="submit">Reintentar</button>
+                    </form>
+                  </div>
                 <% } else { %>
                   <div class="pdf-pending">
-                    <span class="badge badge-pending">Pendiente</span>
+                    <form class="inline-form" method="post" action="/reportes/<%= r.id %>/generar-pdf">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <button type="submit">Generar PDF</button>
+                    </form>
                     <form class="pdf-form" method="post" action="/reportes/<%= r.id %>/pdf" enctype="multipart/form-data">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <input type="file" name="pdf" accept="application/pdf" required>
