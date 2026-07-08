@@ -7,3 +7,5 @@ server/data/pdfs/*
 !server/data/pdfs/.gitkeep
 server/.env
 .playwright-mcp
+.worktrees
+.worktrees/
