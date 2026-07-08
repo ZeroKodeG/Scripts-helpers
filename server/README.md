@@ -15,7 +15,7 @@ cd ..
 docker compose up -d --build
 ```
 
-Queda en `http://localhost:3000`. Los datos (SQLite + PDFs) persisten en `server/data/` en el host via volumen, aunque recrees el contenedor.
+Queda en `http://localhost:3000`. Los datos (SQLite + PDFs) persisten en el volumen nombrado `auditoria_data` (montado en `/app/data`), asi que sobreviven a `docker compose down` y a reconstruir el contenedor.
 
 Comandos utiles:
 ```
@@ -61,7 +61,7 @@ curl -X POST http://localhost:3000/api/reportes \
 
 - SQLite en `data/auditoria.db` (una fila por corrida: equipo, fecha_hora, los 3 textos de reporte, ruta del PDF si se subio).
 - PDFs subidos manualmente desde el dashboard en `data/pdfs/<id>.pdf`.
-- Ambos quedan fuera de git (ver `.gitignore` en la raiz del repo) y, con Docker, persisten en el host via el volumen `./server/data:/app/data` del `docker-compose.yml`.
+- Ambos quedan fuera de git (ver `.gitignore` en la raiz del repo) y, con Docker, persisten en el volumen nombrado `auditoria_data` (definido en `docker-compose.yml`).
 
 ## Generacion automatica de PDF
 
@@ -101,6 +101,8 @@ Las mitigaciones actuales son un directorio temporal por reporte (aislamiento de
 3. `docker compose up -d`. El contenedor reinicia solo (`restart: unless-stopped`) si el VPS reinicia o el proceso cae.
 4. Si se expone a internet, poner nginx (u otro reverse proxy) delante con HTTPS (Let's Encrypt/certbot) — no incluido en este proyecto.
 5. Actualizar `AUDIT_API_URL` / `.audit_config` en cada servidor Windows para que apunte a esta URL.
+
+> **Dokploy / PaaS:** el `docker-compose.yml` usa el volumen nombrado `auditoria_data` (no un bind mount relativo) precisamente para que la BD y los PDFs persistan entre deploys. Si tu proveedor permite editar el compose o montar volumenes persistentes, asegurate de que el volumen nombrado se respete; un bind mount tipo `./server/data` se pierde al recrear el directorio de build en cada deploy.
 
 **Opcion B — Node directo (sin Docker):**
 1. Clonar el repo en el VPS, `cd server && npm install --production`.

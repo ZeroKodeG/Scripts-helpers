@@ -65,14 +65,18 @@ function findPdf(dir) {
   return null;
 }
 
-function runOpencode({ workDir, prompt, env, timeoutMs, killGraceMs }) {
+function runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs }) {
   return new Promise((resolve) => {
     const model = env.OPENCODE_MODEL;
+    const startedAt = Date.now();
+    const tag = `[opencode pdf:${id}]`;
+    console.log(`${tag} iniciando modelo=${model} timeout=${timeoutMs}ms workDir=${workDir}`);
     const child = spawn(
       "opencode",
       ["run", "--auto", "--model", model, "--dir", workDir, "--format", "json", prompt],
       { cwd: workDir, env }
     );
+    console.log(`${tag} pid=${child.pid}`);
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -91,23 +95,32 @@ function runOpencode({ workDir, prompt, env, timeoutMs, killGraceMs }) {
 
     const timer = setTimeout(() => {
       timedOut = true;
+      console.error(`${tag} timeout (${timeoutMs}ms) alcanzado, enviando SIGTERM al pid=${child.pid}`);
       child.kill("SIGTERM");
       killTimer = setTimeout(() => {
+        console.error(`${tag} pid=${child.pid} no termino tras SIGTERM, enviando SIGKILL`);
         child.kill("SIGKILL");
         resolveOnce({ code: null, stdout, stderr, timedOut });
       }, killGraceMs);
     }, timeoutMs);
 
     child.stdout.on("data", (chunk) => {
-      stdout = truncateTail(stdout + chunk.toString());
+      const text = chunk.toString();
+      stdout = truncateTail(stdout + text);
+      process.stdout.write(`${tag} ${text}`);
     });
     child.stderr.on("data", (chunk) => {
-      stderr = truncateTail(stderr + chunk.toString());
+      const text = chunk.toString();
+      stderr = truncateTail(stderr + text);
+      process.stderr.write(`${tag} ${text}`);
     });
     child.on("error", (error) => {
+      console.error(`${tag} fallo al lanzar el proceso: ${error.message}`);
       resolveOnce({ code: null, stdout, stderr: truncateTail(`${stderr}\n${error.message}`), timedOut });
     });
     child.on("close", (code) => {
+      const elapsedMs = Date.now() - startedAt;
+      console.log(`${tag} finalizo code=${code} transcurrido=${elapsedMs}ms${timedOut ? " (timeout)" : ""}`);
       resolveOnce({ code, stdout, stderr, timedOut });
     });
   });
@@ -174,11 +187,19 @@ function createPdfGenerator(options = {}) {
         fs.copyFileSync(opencodeConfigPath, path.join(workDir, "opencode.json"));
       }
 
-      const result = await runOpencode({ workDir, prompt, env, timeoutMs, killGraceMs });
+      const result = await runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs });
       const generatedPdf = findPdf(workDir);
       if (result.code !== 0 || !generatedPdf) {
+        if (result.timedOut) {
+          const tail = truncateTail([result.stderr, result.stdout].filter(Boolean).join("\n"));
+          throw new Error(
+            tail
+              ? `opencode excedio el tiempo limite (${timeoutMs}ms). Ultima salida del proceso:\n${tail}`
+              : `opencode excedio el tiempo limite (${timeoutMs}ms) sin producir salida`
+          );
+        }
         const details = truncateTail([result.stderr, result.stdout].filter(Boolean).join("\n"));
-        throw new Error(details || (result.timedOut ? "opencode excedio el tiempo limite" : "opencode no genero un PDF"));
+        throw new Error(details || "opencode no genero un PDF");
       }
 
       const fileName = `${id}.pdf`;

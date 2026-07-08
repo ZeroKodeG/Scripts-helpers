@@ -14,4 +14,7 @@ services:
       - BITFROST_BASE_URL=${BITFROST_BASE_URL}
       - BITFROST_API_KEY=${BITFROST_API_KEY}
     volumes:
-      - ./server/data:/app/data
+      - auditoria_data:/app/data
+
+volumes:
+  auditoria_data:
