@@ -4,10 +4,14 @@ services:
       context: ./server
     container_name: auditoria-backend
     restart: unless-stopped
-    env_file:
-      - ./server/.env
     environment:
-      - PORT=3000
-      - DB_PATH=./data/auditoria.db
+      - API_KEY=${API_KEY}
+      - PORT=${PORT}
+      - DB_PATH=${DB_PATH}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - OPENCODE_MODEL=${OPENCODE_MODEL}
+      - OPENCODE_TIMEOUT_MS=${OPENCODE_TIMEOUT_MS}
+      - BITFROST_BASE_URL=${BITFROST_BASE_URL}
+      - BITFROST_API_KEY=${BITFROST_API_KEY}
     volumes:
       - ./server/data:/app/data

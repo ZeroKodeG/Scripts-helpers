@@ -12,7 +12,7 @@
       },
       "models": {
         "zerokode-auto": {
-          "name": "zerokode (Auto)",
+          "name": "Zerokode",
           "limit": {
             "context": 200000,
             "output": 32768
