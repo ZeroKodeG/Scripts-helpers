@@ -53,6 +53,7 @@ Client scripts:
 - All commands append to `%REPORTE%` with `>>"%REPORTE%" echo ...` or `... >> "%REPORTE%" 2>&1` — always redirect stderr too, since many `wmic`/`reg`/`net` commands fail silently without admin rights and the script should continue regardless.
 - New audit sections should go through the `:seccion "[+] TITLE"` subroutine so they get consistent headers in both the console and the report file.
 - When adding checks that use delayed-expansion variables inside `for`/`if` blocks, use `!var!` not `%var%`.
+- **All `.bat` files must use CRLF line endings.** They're authored/edited from a non-Windows environment, and LF-only files download fine (correct byte content, correct line count) but `goto :label` becomes unreliable in `cmd.exe` — it can fail with "The system cannot find the batch label specified" even though the label is right there in the file. After editing any `.bat` file, verify with `python3 -c "print(open('FILE','rb').read().count(b'\r\n'))"` and compare to the line count; if it's 0 or lower than expected, reconvert (`data.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')`) before committing.
 
 Backend:
 - Comments/identifiers in Spanish for domain terms (`equipo`, `reportes`), English for generic code — matches what's already there; don't force a full-repo language switch.
