@@ -3,8 +3,13 @@ const multer = require("multer");
 const db = require("../db");
 const { requireApiKey } = require("../auth");
 
-const upload = multer(); // solo se usa para leer campos de texto multipart, sin archivos
-const parseUrlEncoded = express.urlencoded({ extended: false });
+const upload = multer({
+  limits: {
+    fieldSize: 20 * 1024 * 1024,
+    fields: 10,
+  },
+}); // solo se usa para leer campos de texto multipart, sin archivos
+const parseUrlEncoded = express.urlencoded({ extended: false, limit: "20mb", parameterLimit: 10 });
 
 const router = express.Router();
 
