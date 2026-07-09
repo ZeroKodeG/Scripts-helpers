@@ -75,48 +75,51 @@ set "UPLOAD_RESP=%TEMP%\audit_upload_response.txt"
 del "%UPLOAD_SCRIPT%" >nul 2>&1
 del "%UPLOAD_RESP%" >nul 2>&1
 
->"%UPLOAD_SCRIPT%" echo(param(
->>"%UPLOAD_SCRIPT%" echo(    [string]$ApiUrl,
->>"%UPLOAD_SCRIPT%" echo(    [string]$ApiKey,
->>"%UPLOAD_SCRIPT%" echo(    [string]$Equipo,
->>"%UPLOAD_SCRIPT%" echo(    [string]$RepSistema,
->>"%UPLOAD_SCRIPT%" echo(    [string]$RepRed,
->>"%UPLOAD_SCRIPT%" echo(    [string]$RepLogs,
->>"%UPLOAD_SCRIPT%" echo(    [string]$ResponsePath
->>"%UPLOAD_SCRIPT%" echo(^))
->>"%UPLOAD_SCRIPT%" echo([Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12)
->>"%UPLOAD_SCRIPT%" echo(Add-Type -AssemblyName System.Net.Http)
->>"%UPLOAD_SCRIPT%" echo(function Add-TextPart {
->>"%UPLOAD_SCRIPT%" echo(    param([System.Net.Http.MultipartFormDataContent]$Content, [string]$Name, [string]$Path)
->>"%UPLOAD_SCRIPT%" echo(    if (Test-Path $Path) {
->>"%UPLOAD_SCRIPT%" echo(        $Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::Default)
->>"%UPLOAD_SCRIPT%" echo(        $Content.Add((New-Object System.Net.Http.StringContent($Text, [System.Text.Encoding]::UTF8^)), $Name)
->>"%UPLOAD_SCRIPT%" echo(    }
->>"%UPLOAD_SCRIPT%" echo(})
->>"%UPLOAD_SCRIPT%" echo(try {
->>"%UPLOAD_SCRIPT%" echo(    $Client = New-Object System.Net.Http.HttpClient
->>"%UPLOAD_SCRIPT%" echo(    $Client.DefaultRequestHeaders.Add('X-API-Key', $ApiKey)
->>"%UPLOAD_SCRIPT%" echo(    $Multipart = New-Object System.Net.Http.MultipartFormDataContent
->>"%UPLOAD_SCRIPT%" echo(    $Multipart.Add((New-Object System.Net.Http.StringContent($Equipo, [System.Text.Encoding]::UTF8^)), 'equipo')
->>"%UPLOAD_SCRIPT%" echo(    Add-TextPart $Multipart 'reporte_sistema' $RepSistema
->>"%UPLOAD_SCRIPT%" echo(    Add-TextPart $Multipart 'reporte_red' $RepRed
->>"%UPLOAD_SCRIPT%" echo(    Add-TextPart $Multipart 'reporte_logs' $RepLogs
->>"%UPLOAD_SCRIPT%" echo(    $Url = $ApiUrl.TrimEnd('/'^) + '/api/reportes'
->>"%UPLOAD_SCRIPT%" echo(    $Response = $Client.PostAsync($Url, $Multipart^).Result
->>"%UPLOAD_SCRIPT%" echo(    $Body = $Response.Content.ReadAsStringAsync(^).Result
->>"%UPLOAD_SCRIPT%" echo(    $Lines = @('HTTP ' + [int]$Response.StatusCode)
->>"%UPLOAD_SCRIPT%" echo(    if ($Body) { $Lines += $Body }
->>"%UPLOAD_SCRIPT%" echo(    [System.IO.File]::WriteAllLines($ResponsePath, $Lines)
->>"%UPLOAD_SCRIPT%" echo(    if ($Response.IsSuccessStatusCode) { exit 0 }
->>"%UPLOAD_SCRIPT%" echo(    exit 1
->>"%UPLOAD_SCRIPT%" echo(} catch {
->>"%UPLOAD_SCRIPT%" echo(    $Message = $_.Exception.Message
->>"%UPLOAD_SCRIPT%" echo(    if ($_.Exception.InnerException) {
->>"%UPLOAD_SCRIPT%" echo(        $Message = $Message + ' ^| ' + $_.Exception.InnerException.Message
->>"%UPLOAD_SCRIPT%" echo(    }
->>"%UPLOAD_SCRIPT%" echo(    [System.IO.File]::WriteAllLines($ResponsePath, @('[ERROR] ' + $Message))
->>"%UPLOAD_SCRIPT%" echo(    exit 1
->>"%UPLOAD_SCRIPT%" echo(})
+>"%UPLOAD_SCRIPT%" echo param(
+>>"%UPLOAD_SCRIPT%" echo     [string]$ApiUrl,
+>>"%UPLOAD_SCRIPT%" echo     [string]$ApiKey,
+>>"%UPLOAD_SCRIPT%" echo     [string]$Equipo,
+>>"%UPLOAD_SCRIPT%" echo     [string]$RepSistema,
+>>"%UPLOAD_SCRIPT%" echo     [string]$RepRed,
+>>"%UPLOAD_SCRIPT%" echo     [string]$RepLogs,
+>>"%UPLOAD_SCRIPT%" echo     [string]$ResponsePath
+>>"%UPLOAD_SCRIPT%" echo ^)
+>>"%UPLOAD_SCRIPT%" echo $ErrorActionPreference = 'Stop'
+>>"%UPLOAD_SCRIPT%" echo [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+>>"%UPLOAD_SCRIPT%" echo function Add-TextField {
+>>"%UPLOAD_SCRIPT%" echo     param([System.Collections.Specialized.NameValueCollection]$Form, [string]$Name, [string]$Path)
+>>"%UPLOAD_SCRIPT%" echo     if (Test-Path $Path) {
+>>"%UPLOAD_SCRIPT%" echo         $Form[$Name] = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::Default)
+>>"%UPLOAD_SCRIPT%" echo     }
+>>"%UPLOAD_SCRIPT%" echo }
+>>"%UPLOAD_SCRIPT%" echo try {
+>>"%UPLOAD_SCRIPT%" echo     $Client = New-Object System.Net.WebClient
+>>"%UPLOAD_SCRIPT%" echo     $Client.Headers.Add('X-API-Key', $ApiKey)
+>>"%UPLOAD_SCRIPT%" echo     $Form = New-Object System.Collections.Specialized.NameValueCollection
+>>"%UPLOAD_SCRIPT%" echo     $Form['equipo'] = $Equipo
+>>"%UPLOAD_SCRIPT%" echo     Add-TextField $Form 'reporte_sistema' $RepSistema
+>>"%UPLOAD_SCRIPT%" echo     Add-TextField $Form 'reporte_red' $RepRed
+>>"%UPLOAD_SCRIPT%" echo     Add-TextField $Form 'reporte_logs' $RepLogs
+>>"%UPLOAD_SCRIPT%" echo     $Url = $ApiUrl.TrimEnd('/') + '/api/reportes'
+>>"%UPLOAD_SCRIPT%" echo     $Bytes = $Client.UploadValues($Url, 'POST', $Form)
+>>"%UPLOAD_SCRIPT%" echo     $Body = [System.Text.Encoding]::UTF8.GetString($Bytes)
+>>"%UPLOAD_SCRIPT%" echo     [System.IO.File]::WriteAllText($ResponsePath, ('HTTP 201' + [Environment]::NewLine + $Body))
+>>"%UPLOAD_SCRIPT%" echo     exit 0
+>>"%UPLOAD_SCRIPT%" echo } catch [System.Net.WebException] {
+>>"%UPLOAD_SCRIPT%" echo     $Code = 'ERROR'
+>>"%UPLOAD_SCRIPT%" echo     $Body = ''
+>>"%UPLOAD_SCRIPT%" echo     if ($_.Exception.Response -ne $null) {
+>>"%UPLOAD_SCRIPT%" echo         $Code = [int]$_.Exception.Response.StatusCode
+>>"%UPLOAD_SCRIPT%" echo         $Reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+>>"%UPLOAD_SCRIPT%" echo         $Body = $Reader.ReadToEnd()
+>>"%UPLOAD_SCRIPT%" echo         $Reader.Close()
+>>"%UPLOAD_SCRIPT%" echo     }
+>>"%UPLOAD_SCRIPT%" echo     [System.IO.File]::WriteAllText($ResponsePath, ('HTTP ' + $Code + [Environment]::NewLine + $Body + [Environment]::NewLine + $_.Exception.Message))
+>>"%UPLOAD_SCRIPT%" echo     exit 1
+>>"%UPLOAD_SCRIPT%" echo } catch {
+>>"%UPLOAD_SCRIPT%" echo     [System.IO.File]::WriteAllText($ResponsePath, ('[ERROR] ' + $_.Exception.Message))
+>>"%UPLOAD_SCRIPT%" echo     exit 1
+>>"%UPLOAD_SCRIPT%" echo }
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%UPLOAD_SCRIPT%" "%API_URL%" "%API_KEY%" "%COMPUTERNAME%" "%REP_SISTEMA%" "%REP_RED%" "%REP_LOGS%" "%UPLOAD_RESP%"
 set "UPLOAD_EXIT=%errorlevel%"

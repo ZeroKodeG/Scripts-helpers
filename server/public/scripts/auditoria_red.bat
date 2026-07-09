@@ -116,16 +116,22 @@ nbtstat -n >>"%REPORTE%" 2>&1
 nbtstat -c >>"%REPORTE%" 2>&1
 
 call :seccion "[+] CONECTIVIDAD AL GATEWAY"
-for /f "tokens=2 delims=:" %%G in ('ipconfig ^| findstr /i /c:"Puerta de enlace" /c:"Default Gateway"') do (
-    set "GW=%%G"
+set "GATEWAY_PROBADO="
+for /f "tokens=1,* delims=:" %%A in ('ipconfig ^| findstr /i /c:"Puerta de enlace" /c:"Default Gateway"') do (
+    set "GW=%%B"
     set "GW=!GW: =!"
-    if not "!GW!"=="" (
-        >>"%REPORTE%" echo Gateway: !GW!
-        ping -n 3 !GW! >>"%REPORTE%" 2>&1
-        >>"%REPORTE%" echo Ruta al gateway:
-        tracert -d -h 10 !GW! >>"%REPORTE%" 2>&1
+    if not "!GW!"=="" if not defined GATEWAY_PROBADO (
+        echo !GW! | findstr /r "^[0-9][0-9]*\.[0-9]" >nul
+        if !errorlevel! equ 0 (
+            set "GATEWAY_PROBADO=1"
+            >>"%REPORTE%" echo Gateway: !GW!
+            ping -n 2 -w 1000 !GW! >>"%REPORTE%" 2>&1
+            >>"%REPORTE%" echo Ruta al gateway:
+            tracert -d -w 750 -h 5 !GW! >>"%REPORTE%" 2>&1
+        )
     )
 )
+if not defined GATEWAY_PROBADO >>"%REPORTE%" echo No se detecto un gateway IPv4 util para la prueba.
 
 call :seccion "[+] CACHE DNS LOCAL"
 ipconfig /displaydns >>"%REPORTE%" 2>&1

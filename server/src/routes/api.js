@@ -4,13 +4,14 @@ const db = require("../db");
 const { requireApiKey } = require("../auth");
 
 const upload = multer(); // solo se usa para leer campos de texto multipart, sin archivos
+const parseUrlEncoded = express.urlencoded({ extended: false });
 
 const router = express.Router();
 
 router.use(requireApiKey);
 
 // POST /api/reportes - sube los 3 reportes de una corrida de un equipo
-router.post("/reportes", upload.none(), (req, res) => {
+router.post("/reportes", parseUrlEncoded, upload.none(), (req, res) => {
   const { equipo, reporte_sistema, reporte_red, reporte_logs } = req.body;
 
   if (!equipo) {
