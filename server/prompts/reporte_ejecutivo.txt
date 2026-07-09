@@ -1,6 +1,20 @@
 Genera un reporte en formato PDF con el estilo corporativo definido a
-continuación y entrégamelo como archivo descargable. Usa la herramienta
-o tecnología que tengas disponible para producirlo.
+continuación y entrégamelo como archivo descargable.
+
+===================================================
+ENTORNO Y RESTRICCIONES TÉCNICAS
+===================================================
+- Tienes Python 3 con estas librerías YA INSTALADAS: reportlab, fpdf2,
+  pandas, openpyxl, matplotlib, Pillow.
+- Genera el PDF con Python usando reportlab. Las especificaciones de abajo
+  están en puntos (pt) y milímetros (mm), unidades nativas de reportlab, y
+  exigen control fino de tablas, colores y encabezado/pie repetidos en cada
+  página; reportlab es la herramienta adecuada para todo eso.
+- NO uses `npm install` ni instales paquetes de ningún tipo. NO dependas de
+  binarios externos (wkhtmltopdf, chromium, weasyprint, LibreOffice). Si una
+  librería no está en la lista de arriba, asume que no está disponible.
+- Escribe un script Python y ejecútalo para producir el PDF en el directorio
+  de trabajo.
 
 ===================================================
 ESPECIFICACIONES DE ESTILO
