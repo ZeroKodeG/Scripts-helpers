@@ -17,6 +17,12 @@ ENV NODE_ENV=production
 ARG OPENCODE_VERSION=latest
 RUN npm install -g opencode-ai@${OPENCODE_VERSION} @ai-sdk/openai-compatible
 
+COPY requirements.txt ./
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src

@@ -65,7 +65,7 @@ curl -X POST http://localhost:3000/api/reportes \
 
 ## Generacion automatica de PDF
 
-El dashboard permite generar un PDF ejecutivo desde cada fila con el boton `Generar PDF`. El backend encola la generacion, escribe los tres reportes en un directorio temporal y ejecuta `opencode run --auto` con el prompt versionado en `prompts/reporte_ejecutivo.txt`.
+El dashboard permite generar un PDF ejecutivo desde cada fila con el boton `Generar PDF`. El backend encola la generacion, escribe los tres reportes en un directorio temporal y ejecuta `opencode run --auto` con el prompt versionado en `prompts/reporte_ejecutivo.txt`. La imagen incluye Python 3 y las librerias de `requirements.txt` (reportlab, fpdf2, pandas, openpyxl, matplotlib, Pillow) para que el modelo pueda generar el PDF y procesar CSV/datos dentro del directorio temporal.
 
 Variables requeridas en `.env`:
 

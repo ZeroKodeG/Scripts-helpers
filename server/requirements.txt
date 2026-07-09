@@ -1,0 +1,6 @@
+reportlab
+fpdf2
+pandas
+openpyxl
+matplotlib
+Pillow
