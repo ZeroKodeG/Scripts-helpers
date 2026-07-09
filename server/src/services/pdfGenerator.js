@@ -71,10 +71,11 @@ function runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs }) {
     const startedAt = Date.now();
     const tag = `[opencode pdf:${id}]`;
     console.log(`${tag} iniciando modelo=${model} timeout=${timeoutMs}ms workDir=${workDir}`);
+    const childEnv = { ...env, OPENCODE_CONFIG_DIR: workDir };
     const child = spawn(
       "opencode",
       ["run", "--auto", "--model", model, "--dir", workDir, "--format", "json", prompt],
-      { cwd: workDir, env }
+      { cwd: workDir, env: childEnv }
     );
     console.log(`${tag} pid=${child.pid}`);
     let stdout = "";
