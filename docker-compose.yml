@@ -11,8 +11,7 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - OPENCODE_MODEL=${OPENCODE_MODEL}
       - OPENCODE_TIMEOUT_MS=${OPENCODE_TIMEOUT_MS}
-      - BITFROST_BASE_URL=${BITFROST_BASE_URL}
-      - BITFROST_API_KEY=${BITFROST_API_KEY}
+      - ZAI_API_KEY=${ZAI_API_KEY}
     volumes:
       - auditoria_data:/app/data
 

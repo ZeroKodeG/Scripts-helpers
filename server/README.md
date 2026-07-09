@@ -69,12 +69,11 @@ El dashboard permite generar un PDF ejecutivo desde cada fila con el boton `Gene
 
 Variables requeridas en `.env`:
 
-- `OPENCODE_MODEL`: modelo en formato `provider/modelo`, por ejemplo `bitfrost/zerokode-auto`.
+- `OPENCODE_MODEL`: modelo en formato `provider/modelo`, por ejemplo `zai/glm-5.1` (tambien `zai/glm-5.2`).
 - `OPENCODE_TIMEOUT_MS`: timeout del proceso, por defecto `600000`.
-- `BITFROST_BASE_URL`: endpoint del proveedor OpenAI-compatible (ej. `https://bf.alvesc.com/v1`).
-- `BITFROST_API_KEY`: API key del proveedor Bitfrost.
+- `ZAI_API_KEY`: API key del Coding Plan de ZAI (z.ai). Debe ser la key especifica del Coding Plan, no una key normal de la plataforma.
 
-La configuracion del proveedor (baseURL, paquete npm, definicion de modelos) vive en `opencode.json` versionado en el repo. Los secretos (`BITFROST_API_KEY`) y la baseURL se interpolan en runtime via `{env:VARIABLE}` — no hay secretos en el archivo. Para cambiar de endpoint o modelo, editar `.env` (baseURL/api key/modelo) y/o `opencode.json` (definicion de modelos disponibles).
+La configuracion del proveedor (baseURL del Coding Plan `https://api.z.ai/api/coding/paas/v4`, paquete npm, definicion de modelos) vive en `opencode.json` versionado en el repo. El secreto (`ZAI_API_KEY`) se interpola en runtime via `{env:ZAI_API_KEY}` en el header `Authorization: Bearer` — no hay secretos en el archivo. Para cambiar de modelo, editar `.env` (`OPENCODE_MODEL`) o `opencode.json` (modelos disponibles).
 
 Antes de usarlo en produccion, reemplazar el marcador `REEMPLAZAR_PROMPT_EJECUTIVO` en `prompts/reporte_ejecutivo.txt` por el prompt final. Mientras el marcador siga presente, la generacion falla a proposito con un error visible en el dashboard.
 
