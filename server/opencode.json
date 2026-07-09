@@ -7,7 +7,7 @@
       "options": {
         "baseURL": "{env:BITFROST_BASE_URL}",
         "headers": {
-          "x-bf-kv": "{env:BITFROST_API_KEY}"
+          "x-bf-vk": "{env:BITFROST_API_KEY}"
         }
       },
       "models": {
