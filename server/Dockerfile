@@ -12,14 +12,17 @@ RUN npm ci --omit=dev
 # ---- runtime: imagen final, sin herramientas de compilacion ----
 FROM node:20-bookworm-slim
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    TZ=America/Monterrey
 
 ARG OPENCODE_VERSION=latest
 RUN npm install -g opencode-ai@${OPENCODE_VERSION} @ai-sdk/openai-compatible
 
 COPY requirements.txt ./
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pip \
+    && apt-get install -y --no-install-recommends python3 python3-pip tzdata \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 

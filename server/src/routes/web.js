@@ -5,6 +5,7 @@ const multer = require("multer");
 const db = require("../db");
 const { checkApiKey, requireSession, requireCsrf } = require("../auth");
 const { encolarGeneracion } = require("../services/pdfGenerator");
+const { formatDateForFileName, formatDateTimeForDisplay } = require("../reportTime");
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ router.get("/dashboard", requireSession, (req, res) => {
     .all()
     .map((r) => r.equipo);
 
-  const reportes = equipoFiltro
+  const reportes = (equipoFiltro
     ? db
         .prepare(
           "SELECT id, equipo, fecha_hora, pdf_path, pdf_status, pdf_error FROM reportes WHERE equipo = ? ORDER BY fecha_hora DESC"
@@ -72,7 +73,10 @@ router.get("/dashboard", requireSession, (req, res) => {
         .prepare(
           "SELECT id, equipo, fecha_hora, pdf_path, pdf_status, pdf_error FROM reportes ORDER BY fecha_hora DESC"
         )
-        .all();
+        .all()).map((reporte) => ({
+    ...reporte,
+    fecha_hora_local: formatDateTimeForDisplay(reporte.fecha_hora),
+  }));
 
   res.render("dashboard", { equipos, reportes, equipoFiltro });
 });
@@ -130,7 +134,7 @@ router.post(
 );
 
 router.get("/reportes/:id/pdf", requireSession, (req, res) => {
-  const row = db.prepare("SELECT pdf_path FROM reportes WHERE id = ?").get(req.params.id);
+  const row = db.prepare("SELECT pdf_path, equipo, fecha_hora FROM reportes WHERE id = ?").get(req.params.id);
   if (!row || !row.pdf_path) {
     return res.status(404).send("No hay PDF para este reporte");
   }
@@ -141,7 +145,8 @@ router.get("/reportes/:id/pdf", requireSession, (req, res) => {
   if (!dest.startsWith(resolvedDir)) {
     return res.status(400).send("Ruta de archivo invalida");
   }
-  res.download(dest);
+  const downloadName = `${sanitizeSegment(row.equipo || "reporte")}.${formatDateForFileName(row.fecha_hora)}.pdf`;
+  res.download(dest, downloadName);
 });
 
 module.exports = router;

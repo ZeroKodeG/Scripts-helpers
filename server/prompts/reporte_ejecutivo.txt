@@ -15,6 +15,10 @@ ENTORNO Y RESTRICCIONES TÉCNICAS
   librería no está en la lista de arriba, asume que no está disponible.
 - Escribe un script Python y ejecútalo para producir el PDF en el directorio
   de trabajo.
+- La fecha y hora oficial del reporte esta en `reporte_metadata.json` y ya
+  viene resuelta para la zona horaria `America/Monterrey`. Usa esa fecha para
+  cualquier texto visible o metadato del PDF; no calcules fechas desde el reloj
+  del sistema ni asumas UTC.
 
 ===================================================
 ESPECIFICACIONES DE ESTILO
@@ -121,5 +125,6 @@ Todos los documentos para la generacion de este reporte los puedes encontrar en 
 - reporte_sistema.txt
 - reporte_red.txt
 - reporte_logs.txt
+- reporte_metadata.json
 
 El PDF debe quedar guardado dentro del directorio de trabajo.

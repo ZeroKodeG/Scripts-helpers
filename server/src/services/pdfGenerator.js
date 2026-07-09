@@ -3,6 +3,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 
 const defaultDb = require("../db");
+const { buildReportDateContext } = require("../reportTime");
 
 const PLACEHOLDER = "REEMPLAZAR_PROMPT_EJECUTIVO";
 const OUTPUT_TAIL_LIMIT = 2000;
@@ -142,7 +143,7 @@ function createPdfGenerator(options = {}) {
   let drainPromise = Promise.resolve();
 
   const getReporte = db.prepare(
-    "SELECT id, reporte_sistema, reporte_red, reporte_logs, pdf_status FROM reportes WHERE id = ?"
+    "SELECT id, equipo, fecha_hora, reporte_sistema, reporte_red, reporte_logs, pdf_status FROM reportes WHERE id = ?"
   );
   const markGenerating = db.prepare(
     "UPDATE reportes SET pdf_status = 'generando', pdf_error = NULL WHERE id = ?"
@@ -184,6 +185,17 @@ function createPdfGenerator(options = {}) {
       fs.writeFileSync(path.join(workDir, "reporte_sistema.txt"), row.reporte_sistema || "");
       fs.writeFileSync(path.join(workDir, "reporte_red.txt"), row.reporte_red || "");
       fs.writeFileSync(path.join(workDir, "reporte_logs.txt"), row.reporte_logs || "");
+      fs.writeFileSync(
+        path.join(workDir, "reporte_metadata.json"),
+        JSON.stringify(
+          {
+            equipo: row.equipo,
+            ...buildReportDateContext(row.fecha_hora),
+          },
+          null,
+          2
+        )
+      );
 
       if (fs.existsSync(opencodeConfigPath)) {
         fs.copyFileSync(opencodeConfigPath, path.join(workDir, "opencode.json"));
