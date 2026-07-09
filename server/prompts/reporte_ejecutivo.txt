@@ -1,130 +1,158 @@
-Genera un reporte en formato PDF con el estilo corporativo definido a
-continuación y entrégamelo como archivo descargable.
+Genera un archivo llamado `reporte_normalizado.json` en el directorio de trabajo.
+
+Tu unica salida valida es ese archivo JSON. No generes PDF. No generes Markdown.
+No imprimas el reporte final en texto libre. No agregues secciones nuevas.
 
 ===================================================
-ENTORNO Y RESTRICCIONES TÉCNICAS
-===================================================
-- Tienes Python 3 con estas librerías YA INSTALADAS: reportlab, fpdf2,
-  pandas, openpyxl, matplotlib, Pillow.
-- Genera el PDF con Python usando reportlab. Las especificaciones de abajo
-  están en puntos (pt) y milímetros (mm), unidades nativas de reportlab, y
-  exigen control fino de tablas, colores y encabezado/pie repetidos en cada
-  página; reportlab es la herramienta adecuada para todo eso.
-- NO uses `npm install` ni instales paquetes de ningún tipo. NO dependas de
-  binarios externos (wkhtmltopdf, chromium, weasyprint, LibreOffice). Si una
-  librería no está en la lista de arriba, asume que no está disponible.
-- Escribe un script Python y ejecútalo para producir el PDF en el directorio
-  de trabajo.
-- La fecha y hora oficial del reporte esta en `reporte_metadata.json` y ya
-  viene resuelta para la zona horaria `America/Monterrey`. Usa esa fecha para
-  cualquier texto visible o metadato del PDF; no calcules fechas desde el reloj
-  del sistema ni asumas UTC.
-
-===================================================
-ESPECIFICACIONES DE ESTILO
+OBJETIVO
 ===================================================
 
-PALETA DE COLORES — respetar exactamente estos valores hex, sin variantes:
-  DARK_GRAY   #1F2933   encabezado de página, títulos de sección
-  MID_GRAY    #52606D   texto descriptivo, subtítulos, pie de página
-  LIGHT_GRAY  #CBD2D9   bordes de tabla, línea del pie
-  ACCENT      #2B6CB0   línea de acento, borde inferior de cabecera de tabla
-  ROW_HDR     #E2E8F0   fondo de cabecera de tabla
-  ROW_ALT     #F5F7FA   filas alternadas (zebra striping)
-  WARN        #C53030   alertas y valores críticos — siempre en negrita
-  INFO_CLR    #276749   valores positivos y estados OK
-  Nunca usar negro puro #000000. Todo el texto corre sobre DARK_GRAY o MID_GRAY.
+Vas a leer estos archivos del directorio de trabajo:
 
-PÁGINA:
-  Tamaño Letter (216 × 279 mm). Márgenes 1.8 cm en los cuatro lados.
-  Ancho útil de contenido: 510 pt. Ningún elemento puede excederlo.
+- `reporte_sistema.txt`
+- `reporte_red.txt`
+- `reporte_logs.txt`
+- `reporte_metadata.json`
 
-ENCABEZADO — aparece en todas las páginas:
-  Franja rectangular de fondo DARK_GRAY, altura 1.1 cm, a todo el ancho.
-  Dentro de la franja: texto blanco a la izquierda con el nombre del reporte
-  en negrita 8pt; texto blanco a la derecha con identificador | organización
-  | fecha en regular 8pt.
-  Inmediatamente debajo de la franja: línea horizontal ACCENT de 2.5pt a
-  todo el ancho de la página.
-
-PIE DE PÁGINA — aparece en todas las páginas:
-  Línea horizontal LIGHT_GRAY de 0.5pt a 1.3 cm del borde inferior.
-  Debajo de esa línea, en MID_GRAY 7.5pt: texto izquierdo
-  "Confidencial — Uso interno de TI" y texto derecho "Página N".
-
-TIPOGRAFÍA:
-  Texto general: fuente sans-serif estándar (Helvetica o equivalente), 9pt.
-  Negrita: para títulos, etiquetas de campo y prefijos de hallazgo.
-  Datos técnicos (códigos, IDs, rutas, IPs, hashes, valores exactos):
-    fuente monoespaciada (Courier o equivalente), 8pt.
-  Sin fuentes decorativas ni externas.
-
-BLOQUE DE TÍTULO — solo en la primera página, debajo del encabezado:
-  Título principal: negrita 17pt DARK_GRAY.
-  Subtítulo: [identificador] | [organización] | [fecha] | [estatus si aplica]
-    en regular 10pt MID_GRAY.
-  Línea horizontal ACCENT de 2pt debajo del subtítulo.
-
-SECCIONES — cada sección sigue este patrón sin excepción:
-  1. Título: negrita 11pt DARK_GRAY
-  2. Línea horizontal ACCENT de 0.8pt
-  3. Párrafo descriptivo obligatorio: regular 9pt MID_GRAY, 2 a 4 líneas
-     que explican qué contiene la sección y resumen su hallazgo principal
-  4. Contenido: tablas y subsecciones
-  Subsecciones: etiqueta en negrita 9pt MID_GRAY con espacio superior.
-
-TABLAS — reglas sin excepción:
-  Cabecera: fondo ROW_HDR, texto negrita 8.5pt, borde inferior ACCENT 1.2pt.
-  Filas de datos: zebra striping alternando blanco y ROW_ALT.
-  Bordes de celda: 0.4pt LIGHT_GRAY en toda la tabla.
-  Padding: 6pt horizontal, 4-5pt vertical, alineación superior dentro de celda.
-  Ancho total de cada tabla: exactamente 510 pt, sin excepción.
-  Las celdas con texto largo deben hacer salto de línea automático dentro
-    de la celda; nunca desbordar ni truncar contenido.
-  Toda tabla comienza con su fila de cabecera; ninguna inicia directamente
-    con datos.
-
-COLOR SEMÁNTICO EN CELDAS:
-  Riesgo / alerta / crítico  →  texto WARN rojo, negrita
-  Positivo / OK / sin incidencias  →  texto INFO_CLR verde, regular
-  Dato técnico (código, ruta, ID)  →  monoespaciada DARK_GRAY
-
-HALLAZGOS FUERA DE TABLA:
-  Prefijo "Crítico" en WARN rojo negrita + dos espacios + descripción normal.
-  Prefijo "Informativo" en INFO_CLR verde + dos espacios + descripción normal.
-  Sin viñetas (•, -, *), sin guiones, sin íconos, sin emojis.
-
-REGLAS ABSOLUTAS:
-  Sin íconos ni emojis en ninguna parte del documento.
-  Sin viñetas de ningún tipo; las listas van en tabla o con prefijo de categoría.
-  Sin texto subrayado; el énfasis visual es exclusivamente negrita o color.
-  Sin color de fondo en texto libre; el color semántico aplica solo en tablas
-    o en el prefijo de hallazgos.
-  El identificador principal del reporte debe aparecer idéntico en el
-    encabezado de página, el título y los metadatos del archivo PDF.
-  "Confidencial — Uso interno de TI" debe aparecer en el pie de cada
-    página y en el bloque de cierre.
-
-BLOQUE DE CIERRE — al final del documento:
-  Línea horizontal ACCENT de 1pt.
-  Texto en MID_GRAY 9pt regular:
-    "Documento generado el [fecha]. Fuente: [origen de los datos].
-    Clasificación: Confidencial — Uso interno de TI."
-
-METADATOS DEL ARCHIVO PDF:
-  Título: nombre descriptivo del reporte
-  Autor: área o equipo responsable
-  Asunto: descripción breve del contenido
+Debes consolidar su contenido en un JSON canonico para un renderer posterior.
 
 ===================================================
-CONTENIDO DEL REPORTE
+REGLAS ESTRICTAS
 ===================================================
 
-Todos los documentos para la generacion de este reporte los puedes encontrar en esta misma carpeta.
+1. Debes guardar exactamente un archivo llamado `reporte_normalizado.json`.
+2. No debes generar ningun PDF.
+3. No debes cambiar los nombres de las secciones.
+4. No debes agregar secciones fuera del catalogo permitido.
+5. La seccion final `hallazgos_y_recomendaciones` es obligatoria y siempre debe existir.
+6. Las secciones 1-9 pueden quedar ausentes o vacias si no hay datos suficientes.
+7. Los hallazgos de la seccion final deben consolidar problemas de seguridad, configuracion, red, cuentas, servicios y logs.
+8. No pongas tablas renderizadas ni estilos visuales; solo estructura de datos.
+9. Toda evidencia debe derivarse de los `.txt` fuente. No inventes datos.
+10. Si dos sintomas apuntan al mismo problema accionable, puedes consolidarlos en un solo hallazgo.
 
-- reporte_sistema.txt
-- reporte_red.txt
-- reporte_logs.txt
-- reporte_metadata.json
+===================================================
+CATALOGO DE SECCIONES PERMITIDAS
+===================================================
 
-El PDF debe quedar guardado dentro del directorio de trabajo.
+Usa exactamente estas claves dentro de `sections`:
+
+1. `resumen_ejecutivo`
+2. `informacion_sistema`
+3. `cuentas_privilegios`
+4. `politicas_seguridad`
+5. `configuracion_red`
+6. `superficie_exposicion`
+7. `recursos_y_servicios`
+8. `eventos_autenticacion`
+9. `errores_y_logs`
+10. `hallazgos_y_recomendaciones`
+
+===================================================
+FORMATO OBLIGATORIO DEL JSON
+===================================================
+
+El JSON debe tener esta forma general:
+
+```json
+{
+  "metadata": {
+    "reportTitle": "Auditoria Tecnica de Seguridad - Servidor NOMBRE-EQUIPO",
+    "reportId": "IDENTIFICADOR-DEL-REPORTE",
+    "organization": "ORGANIZACION",
+    "equipo": "NOMBRE-EQUIPO",
+    "localDate": "YYYY-MM-DD",
+    "localDateTime": "YYYY-MM-DD HH:MM:SS",
+    "timeZone": "America/Monterrey"
+  },
+  "sections": {
+    "resumen_ejecutivo": {
+      "title": "Resumen ejecutivo",
+      "summary": "Texto corto de 2 a 4 lineas",
+      "blocks": ["Parrafo 1", "Parrafo 2"]
+    },
+    "informacion_sistema": {
+      "title": "Informacion del sistema",
+      "summary": "Texto corto",
+      "blocks": ["Texto adicional opcional"],
+      "tables": [
+        {
+          "title": "Subtabla opcional",
+          "rows": [
+            {"Campo": "Host", "Valor": "PR-APPNET"}
+          ]
+        }
+      ]
+    },
+    "hallazgos_y_recomendaciones": {
+      "title": "Hallazgos y recomendaciones",
+      "summary": "Sintesis final de hallazgos accionables.",
+      "groups": {
+        "criticos": [
+          {
+            "severity": "Critico",
+            "title": "Titulo corto del hallazgo",
+            "evidence": "Evidencia concreta basada en los txt.",
+            "recommendation": "Accion especifica y ejecutable."
+          }
+        ],
+        "atencion": [],
+        "informativos": []
+      }
+    }
+  }
+}
+```
+
+===================================================
+DETALLES DE CONTENIDO
+===================================================
+
+- `metadata.reportTitle` debe ser consistente y homologado. Usa el formato:
+  `Auditoria Tecnica de Seguridad - Servidor [equipo]`
+- `metadata.reportId` debe construirse a partir del nombre del equipo y la fecha, de forma consistente con la evidencia disponible.
+- `metadata.organization` debe derivarse del dominio o del metadata si existe.
+- `metadata.localDate`, `metadata.localDateTime` y `metadata.timeZone` deben salir de `reporte_metadata.json`.
+
+Para las secciones 1-9:
+- Usa `title` con el nombre visible normalizado en espanol.
+- Usa `summary` para explicar brevemente que contiene la seccion y su hallazgo principal.
+- Usa `blocks` para texto adicional breve.
+- Usa `tables` solo si hay datos tabulares utiles.
+
+Para la seccion `hallazgos_y_recomendaciones`:
+- Siempre debe existir.
+- Debe agrupar hallazgos bajo `criticos`, `atencion` e `informativos`.
+- No hay limite fijo de hallazgos.
+- Incluye todo hallazgo accionable o relevante.
+- Cada hallazgo debe tener obligatoriamente:
+  - `severity`
+  - `title`
+  - `evidence`
+  - `recommendation`
+
+Valores permitidos de `severity`:
+- `Critico`
+- `Atencion`
+- `Informativo`
+
+===================================================
+MAPEO RECOMENDADO DESDE LOS TXT
+===================================================
+
+Mapea el contenido de los scripts a las secciones canonicas de esta forma:
+
+- Informacion general, hardware, sistema operativo, parches, uptime -> `informacion_sistema`
+- Cuentas locales, Administrators, Domain Admins -> `cuentas_privilegios`
+- Contrasenas, firewall, RDP, SMB, UAC, GPO de seguridad -> `politicas_seguridad`
+- IP, DNS, gateway, rutas, ARP, resolucion -> `configuracion_red`
+- Puertos en escucha, conexiones establecidas, destinos remotos -> `superficie_exposicion`
+- Recursos compartidos, servicios, procesos relevantes -> `recursos_y_servicios`
+- Eventos 4624, 4625, 4648, 4672 y similares -> `eventos_autenticacion`
+- Errores System/Application, 7045, 6008/41, configuracion de logs -> `errores_y_logs`
+
+===================================================
+SALIDA FINAL
+===================================================
+
+Escribe `reporte_normalizado.json` en el directorio de trabajo y termina.

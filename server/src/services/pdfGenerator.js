@@ -4,6 +4,8 @@ const { spawn } = require("node:child_process");
 
 const defaultDb = require("../db");
 const { buildReportDateContext } = require("../reportTime");
+const { validateNormalizedReport } = require("./reportSchema");
+const { runRenderer } = require("./reportRenderer");
 
 const PLACEHOLDER = "REEMPLAZAR_PROMPT_EJECUTIVO";
 const OUTPUT_TAIL_LIMIT = 2000;
@@ -65,6 +67,23 @@ function findPdf(dir) {
     }
   }
   return null;
+}
+
+function readNormalizedReport(workDir) {
+  const normalizedPath = path.join(workDir, "reporte_normalizado.json");
+  if (!fs.existsSync(normalizedPath)) {
+    throw new Error("opencode no genero reporte_normalizado.json");
+  }
+
+  let normalized;
+  try {
+    normalized = JSON.parse(fs.readFileSync(normalizedPath, "utf8"));
+  } catch (error) {
+    throw new Error(`reporte_normalizado.json invalido: ${error.message}`);
+  }
+
+  validateNormalizedReport(normalized);
+  return { normalized, normalizedPath };
 }
 
 function runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs }) {
@@ -133,6 +152,7 @@ function createPdfGenerator(options = {}) {
   const db = options.db || defaultDb;
   const dataDir = options.dataDir || path.join(__dirname, "..", "..", "data");
   const promptPath = options.promptPath || path.join(__dirname, "..", "..", "prompts", "reporte_ejecutivo.txt");
+  const rendererScriptPath = options.rendererScriptPath || path.join(__dirname, "..", "..", "scripts", "render_reporte_ejecutivo.py");
   const opencodeConfigPath = options.opencodeConfigPath || path.join(__dirname, "..", "..", "opencode.json");
   const env = buildOpencodeEnv(options.env || process.env);
   const timeoutMs = options.timeoutMs || Number(env.OPENCODE_TIMEOUT_MS) || 10 * 60 * 1000;
@@ -202,8 +222,7 @@ function createPdfGenerator(options = {}) {
       }
 
       const result = await runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs });
-      const generatedPdf = findPdf(workDir);
-      if (result.code !== 0 || !generatedPdf) {
+      if (result.code !== 0) {
         if (result.timedOut) {
           const tail = truncateTail([result.stderr, result.stdout].filter(Boolean).join("\n"));
           throw new Error(
@@ -213,11 +232,24 @@ function createPdfGenerator(options = {}) {
           );
         }
         const details = truncateTail([result.stderr, result.stdout].filter(Boolean).join("\n"));
-        throw new Error(details || "opencode no genero un PDF");
+        throw new Error(details || "opencode no genero reporte_normalizado.json");
+      }
+
+      const { normalizedPath } = readNormalizedReport(workDir);
+      const draftPdfPath = path.join(workDir, "reporte_ejecutivo.pdf");
+      const renderResult = await runRenderer({
+        scriptPath: rendererScriptPath,
+        inputPath: normalizedPath,
+        outputPath: draftPdfPath,
+        timeoutMs,
+      });
+      if (renderResult.code !== 0 || !fs.existsSync(draftPdfPath)) {
+        const details = truncateTail([renderResult.stderr, renderResult.stdout].filter(Boolean).join("\n"));
+        throw new Error(details || "renderer no genero el PDF");
       }
 
       const fileName = `${id}.pdf`;
-      fs.renameSync(generatedPdf, path.join(pdfDir, fileName));
+      fs.renameSync(draftPdfPath, path.join(pdfDir, fileName));
       markReady.run(fileName, id);
     } catch (error) {
       markError.run(truncateTail(error.message), id);

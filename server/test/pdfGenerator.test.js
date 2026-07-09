@@ -45,17 +45,56 @@ test("truncateTail keeps the last characters", () => {
   assert.equal(truncateTail("abc", 10), "abc");
 });
 
-test("generator creates report files, stores generated pdf, and cleans work dir", async () => {
+test("generator creates report files, stores rendered pdf, and cleans work dir", async () => {
   const root = makeDir();
   const binDir = path.join(root, "bin");
   const dataDir = path.join(root, "data");
   const promptPath = path.join(root, "prompt.txt");
+  const rendererScriptPath = path.join(root, "render.py");
   fs.mkdirSync(binDir);
   fs.mkdirSync(dataDir);
-  fs.writeFileSync(promptPath, "Genera un PDF ejecutivo usando los reportes.");
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+  fs.writeFileSync(
+    rendererScriptPath,
+    [
+      "import sys",
+      "from pathlib import Path",
+      "Path(sys.argv[2]).write_bytes(b'%PDF-1.4 fake pdf')",
+    ].join("\n")
+  );
   makeFakeOpencode(
     binDir,
-    "#!/bin/sh\nprintf '%s' '%PDF-1.4 fake pdf' > output.pdf\nexit 0\n"
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync("reporte_normalizado.json", JSON.stringify({
+  metadata: {
+    reportTitle: "Titulo",
+    reportId: "ID",
+    organization: "Org",
+    equipo: "SERVER1",
+    localDate: "2026-07-09",
+    localDateTime: "2026-07-09 15:36:13",
+    timeZone: "America/Monterrey"
+  },
+  sections: {
+    hallazgos_y_recomendaciones: {
+      title: "Hallazgos y recomendaciones",
+      summary: "Resumen final",
+      groups: {
+        criticos: [{
+          severity: "Critico",
+          title: "Firewall off",
+          evidence: "EnableFirewall = 0x0",
+          recommendation: "Activar firewall"
+        }],
+        atencion: [],
+        informativos: []
+      }
+    }
+  }
+}, null, 2));
+process.exit(0);
+`
   );
 
   const db = makeDb();
@@ -63,6 +102,7 @@ test("generator creates report files, stores generated pdf, and cleans work dir"
     db,
     dataDir,
     promptPath,
+    rendererScriptPath,
     env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
     timeoutMs: 5000,
   });
@@ -77,17 +117,85 @@ test("generator creates report files, stores generated pdf, and cleans work dir"
   assert.equal(fs.readdirSync(path.join(dataDir, "tmp")).length, 0);
 });
 
-test("generator prevents duplicate queueing while a report is generating", async () => {
+test("generator marks error when opencode does not produce reporte_normalizado.json", async () => {
   const root = makeDir();
   const binDir = path.join(root, "bin");
   const dataDir = path.join(root, "data");
   const promptPath = path.join(root, "prompt.txt");
   fs.mkdirSync(binDir);
   fs.mkdirSync(dataDir);
-  fs.writeFileSync(promptPath, "Genera un PDF ejecutivo usando los reportes.");
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+  makeFakeOpencode(binDir, "#!/bin/sh\nprintf '%s' '%PDF-1.4 fake pdf' > output.pdf\nexit 0\n");
+
+  const db = makeDb();
+  const generator = createPdfGenerator({
+    db,
+    dataDir,
+    promptPath,
+    env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
+    timeoutMs: 5000,
+  });
+
+  assert.equal(generator.encolarGeneracion(1), true);
+  await generator.drain();
+
+  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes WHERE id = 1").get();
+  assert.equal(row.pdf_status, "error");
+  assert.match(row.pdf_error, /reporte_normalizado\.json/i);
+});
+
+test("generator stores generated pdf when normalized json is valid and renderer succeeds", async () => {
+  const root = makeDir();
+  const binDir = path.join(root, "bin");
+  const dataDir = path.join(root, "data");
+  const promptPath = path.join(root, "prompt.txt");
+  const rendererScriptPath = path.join(root, "render.py");
+
+  fs.mkdirSync(binDir);
+  fs.mkdirSync(dataDir);
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+  fs.writeFileSync(
+    rendererScriptPath,
+    [
+      "import sys",
+      "from pathlib import Path",
+      "Path(sys.argv[2]).write_bytes(b'%PDF-1.4 fake pdf')",
+    ].join("\n")
+  );
+
   makeFakeOpencode(
     binDir,
-    "#!/bin/sh\nsleep 1\nprintf '%s' '%PDF-1.4 fake pdf' > output.pdf\nexit 0\n"
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync("reporte_normalizado.json", JSON.stringify({
+  metadata: {
+    reportTitle: "Titulo",
+    reportId: "ID",
+    organization: "Org",
+    equipo: "SERVER1",
+    localDate: "2026-07-09",
+    localDateTime: "2026-07-09 15:36:13",
+    timeZone: "America/Monterrey"
+  },
+  sections: {
+    hallazgos_y_recomendaciones: {
+      title: "Hallazgos y recomendaciones",
+      summary: "Resumen final",
+      groups: {
+        criticos: [{
+          severity: "Critico",
+          title: "Firewall off",
+          evidence: "EnableFirewall = 0x0",
+          recommendation: "Activar firewall"
+        }],
+        atencion: [],
+        informativos: []
+      }
+    }
+  }
+}, null, 2));
+process.exit(0);
+`
   );
 
   const db = makeDb();
@@ -95,6 +203,179 @@ test("generator prevents duplicate queueing while a report is generating", async
     db,
     dataDir,
     promptPath,
+    rendererScriptPath,
+    env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
+    timeoutMs: 5000,
+  });
+
+  assert.equal(generator.encolarGeneracion(1), true);
+  await generator.drain();
+
+  const row = db.prepare("SELECT pdf_status, pdf_error, pdf_path FROM reportes WHERE id = 1").get();
+  assert.deepEqual(row, { pdf_status: "listo", pdf_error: null, pdf_path: "1.pdf" });
+  assert.equal(fs.existsSync(path.join(dataDir, "pdfs", "1.pdf")), true);
+});
+
+test("generator marks error when normalized json is invalid", async () => {
+  const root = makeDir();
+  const binDir = path.join(root, "bin");
+  const dataDir = path.join(root, "data");
+  const promptPath = path.join(root, "prompt.txt");
+  fs.mkdirSync(binDir);
+  fs.mkdirSync(dataDir);
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+
+  makeFakeOpencode(
+    binDir,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync("reporte_normalizado.json", JSON.stringify({
+  metadata: { reportTitle: "Titulo" },
+  sections: {}
+}, null, 2));
+process.exit(0);
+`
+  );
+
+  const db = makeDb();
+  const generator = createPdfGenerator({
+    db,
+    dataDir,
+    promptPath,
+    env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
+    timeoutMs: 5000,
+  });
+
+  assert.equal(generator.encolarGeneracion(1), true);
+  await generator.drain();
+
+  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes WHERE id = 1").get();
+  assert.equal(row.pdf_status, "error");
+  assert.match(row.pdf_error, /metadata\.reportId|seccion final obligatoria/i);
+});
+
+test("generator marks error when renderer fails", async () => {
+  const root = makeDir();
+  const binDir = path.join(root, "bin");
+  const dataDir = path.join(root, "data");
+  const promptPath = path.join(root, "prompt.txt");
+  fs.mkdirSync(binDir);
+  fs.mkdirSync(dataDir);
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+
+  makeFakeOpencode(
+    binDir,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeFileSync("reporte_normalizado.json", JSON.stringify({
+  metadata: {
+    reportTitle: "Titulo",
+    reportId: "ID",
+    organization: "Org",
+    equipo: "SERVER1",
+    localDate: "2026-07-09",
+    localDateTime: "2026-07-09 15:36:13",
+    timeZone: "America/Monterrey"
+  },
+  sections: {
+    hallazgos_y_recomendaciones: {
+      title: "Hallazgos y recomendaciones",
+      summary: "Resumen final",
+      groups: {
+        criticos: [{
+          severity: "Critico",
+          title: "Firewall off",
+          evidence: "EnableFirewall = 0x0",
+          recommendation: "Activar firewall"
+        }],
+        atencion: [],
+        informativos: []
+      }
+    }
+  }
+}, null, 2));
+process.exit(0);
+`
+  );
+
+  const db = makeDb();
+  const generator = createPdfGenerator({
+    db,
+    dataDir,
+    promptPath,
+    rendererScriptPath: path.join(root, "missing-renderer.py"),
+    env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
+    timeoutMs: 5000,
+  });
+
+  assert.equal(generator.encolarGeneracion(1), true);
+  await generator.drain();
+
+  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes WHERE id = 1").get();
+  assert.equal(row.pdf_status, "error");
+  assert.match(row.pdf_error, /missing-renderer|no such file|can't open file/i);
+});
+
+test("generator prevents duplicate queueing while a report is generating", async () => {
+  const root = makeDir();
+  const binDir = path.join(root, "bin");
+  const dataDir = path.join(root, "data");
+  const promptPath = path.join(root, "prompt.txt");
+  const rendererScriptPath = path.join(root, "render.py");
+  fs.mkdirSync(binDir);
+  fs.mkdirSync(dataDir);
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+  fs.writeFileSync(
+    rendererScriptPath,
+    [
+      "import sys",
+      "from pathlib import Path",
+      "Path(sys.argv[2]).write_bytes(b'%PDF-1.4 fake pdf')",
+    ].join("\n")
+  );
+  makeFakeOpencode(
+    binDir,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+setTimeout(() => {
+  fs.writeFileSync("reporte_normalizado.json", JSON.stringify({
+    metadata: {
+      reportTitle: "Titulo",
+      reportId: "ID",
+      organization: "Org",
+      equipo: "SERVER1",
+      localDate: "2026-07-09",
+      localDateTime: "2026-07-09 15:36:13",
+      timeZone: "America/Monterrey"
+    },
+    sections: {
+      hallazgos_y_recomendaciones: {
+        title: "Hallazgos y recomendaciones",
+        summary: "Resumen final",
+        groups: {
+          criticos: [{
+            severity: "Critico",
+            title: "Firewall off",
+            evidence: "EnableFirewall = 0x0",
+            recommendation: "Activar firewall"
+          }],
+          atencion: [],
+          informativos: []
+        }
+      }
+    }
+  }, null, 2));
+  process.exit(0);
+}, 1000);
+`
+  );
+
+  const db = makeDb();
+  const generator = createPdfGenerator({
+    db,
+    dataDir,
+    promptPath,
+    rendererScriptPath,
     env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
     timeoutMs: 5000,
   });
@@ -228,12 +509,54 @@ test("generator does not pass unrelated secrets to opencode", async () => {
   const binDir = path.join(root, "bin");
   const dataDir = path.join(root, "data");
   const promptPath = path.join(root, "prompt.txt");
+  const rendererScriptPath = path.join(root, "render.py");
   fs.mkdirSync(binDir);
   fs.mkdirSync(dataDir);
-  fs.writeFileSync(promptPath, "Genera un PDF ejecutivo usando los reportes.");
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+  fs.writeFileSync(
+    rendererScriptPath,
+    [
+      "import sys",
+      "from pathlib import Path",
+      "source = Path(sys.argv[1]).with_name('env.txt')",
+      "Path(sys.argv[2]).write_text(source.read_text())",
+    ].join("\n")
+  );
   makeFakeOpencode(
     binDir,
-    "#!/bin/sh\nenv > output.pdf\nexit 0\n"
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const envText = Object.entries(process.env).map(([key, value]) => key + "=" + value).join("\\n");
+fs.writeFileSync("env.txt", envText);
+fs.writeFileSync("reporte_normalizado.json", JSON.stringify({
+  metadata: {
+    reportTitle: "Titulo",
+    reportId: "ID",
+    organization: "Org",
+    equipo: "SERVER1",
+    localDate: "2026-07-09",
+    localDateTime: "2026-07-09 15:36:13",
+    timeZone: "America/Monterrey"
+  },
+  sections: {
+    hallazgos_y_recomendaciones: {
+      title: "Hallazgos y recomendaciones",
+      summary: "Resumen final",
+      groups: {
+        criticos: [{
+          severity: "Critico",
+          title: "Firewall off",
+          evidence: "EnableFirewall = 0x0",
+          recommendation: "Activar firewall"
+        }],
+        atencion: [],
+        informativos: []
+      }
+    }
+  }
+}, null, 2));
+process.exit(0);
+`
   );
 
   const db = makeDb();
@@ -241,6 +564,7 @@ test("generator does not pass unrelated secrets to opencode", async () => {
     db,
     dataDir,
     promptPath,
+    rendererScriptPath,
     env: {
       PATH: `${binDir}${path.delimiter}${process.env.PATH}`,
       HOME: root,
