@@ -75,7 +75,7 @@ function runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs }) {
     const child = spawn(
       "opencode",
       ["run", "--auto", "--model", model, "--dir", workDir, "--format", "json", prompt],
-      { cwd: workDir, env: childEnv }
+      { cwd: workDir, env: childEnv, stdio: ["ignore", "pipe", "pipe"] }
     );
     console.log(`${tag} pid=${child.pid}`);
     let stdout = "";
