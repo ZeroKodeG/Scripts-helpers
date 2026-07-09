@@ -22,8 +22,13 @@ test("ensureReportesSchema creates pdf status columns", () => {
   const names = columns(db);
   assert.ok(names.includes("pdf_status"));
   assert.ok(names.includes("pdf_error"));
+  assert.ok(names.includes("pdf_tokens_input"));
+  assert.ok(names.includes("pdf_tokens_output"));
+  assert.ok(names.includes("pdf_cost_total"));
 
-  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes").get();
+  const row = db
+    .prepare("SELECT pdf_status, pdf_error, pdf_tokens_input, pdf_tokens_output, pdf_cost_total FROM reportes")
+    .get();
   assert.equal(row, undefined);
 });
 
@@ -36,4 +41,7 @@ test("ensureReportesSchema can run more than once", () => {
   const names = columns(db);
   assert.equal(names.filter((name) => name === "pdf_status").length, 1);
   assert.equal(names.filter((name) => name === "pdf_error").length, 1);
+  assert.equal(names.filter((name) => name === "pdf_tokens_input").length, 1);
+  assert.equal(names.filter((name) => name === "pdf_tokens_output").length, 1);
+  assert.equal(names.filter((name) => name === "pdf_cost_total").length, 1);
 });

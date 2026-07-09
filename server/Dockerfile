@@ -29,6 +29,7 @@ RUN apt-get update \
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
+COPY scripts ./scripts
 COPY public ./public
 COPY prompts ./prompts
 COPY opencode.json ./opencode.json

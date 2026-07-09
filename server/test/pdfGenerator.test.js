@@ -216,6 +216,118 @@ process.exit(0);
   assert.equal(fs.existsSync(path.join(dataDir, "pdfs", "1.pdf")), true);
 });
 
+test("generator aggregates input output tokens and cost from opencode step_finish events", async () => {
+  const root = makeDir();
+  const binDir = path.join(root, "bin");
+  const dataDir = path.join(root, "data");
+  const promptPath = path.join(root, "prompt.txt");
+  const rendererScriptPath = path.join(root, "render.py");
+
+  fs.mkdirSync(binDir);
+  fs.mkdirSync(dataDir);
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+  fs.writeFileSync(
+    rendererScriptPath,
+    [
+      "import sys",
+      "from pathlib import Path",
+      "Path(sys.argv[2]).write_bytes(b'%PDF-1.4 fake pdf')",
+    ].join("\n")
+  );
+
+  makeFakeOpencode(
+    binDir,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const lines = [
+  JSON.stringify({
+    type: "step_finish",
+    part: {
+      tokens: {
+        total: 1000,
+        input: 200,
+        output: 50,
+        reasoning: 10,
+        cache: { write: 2, read: 700 }
+      },
+      cost: 0.0123
+    }
+  }),
+  JSON.stringify({
+    type: "step_finish",
+    part: {
+      tokens: {
+        total: 500,
+        input: 100,
+        output: 25,
+        reasoning: 5,
+        cache: { write: 1, read: 300 }
+      },
+      cost: 0.0045
+    }
+  })
+];
+for (const line of lines) process.stdout.write(line + "\\n");
+fs.writeFileSync("reporte_normalizado.json", JSON.stringify({
+  metadata: {
+    reportTitle: "Titulo",
+    reportId: "ID",
+    organization: "Org",
+    equipo: "SERVER1",
+    localDate: "2026-07-09",
+    localDateTime: "2026-07-09 15:36:13",
+    timeZone: "America/Monterrey"
+  },
+  sections: {
+    hallazgos_y_recomendaciones: {
+      title: "Hallazgos y recomendaciones",
+      summary: "Resumen final",
+      groups: {
+        criticos: [{
+          severity: "Critico",
+          title: "Firewall off",
+          evidence: "EnableFirewall = 0x0",
+          recommendation: "Activar firewall"
+        }],
+        atencion: [],
+        informativos: []
+      }
+    }
+  }
+}, null, 2));
+process.exit(0);
+`
+  );
+
+  const db = makeDb();
+  const generator = createPdfGenerator({
+    db,
+    dataDir,
+    promptPath,
+    rendererScriptPath,
+    env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
+    timeoutMs: 5000,
+  });
+
+  assert.equal(generator.encolarGeneracion(1), true);
+  await generator.drain();
+
+  const row = db
+    .prepare(
+      "SELECT pdf_tokens_input, pdf_tokens_output, pdf_tokens_reasoning, pdf_tokens_total, pdf_tokens_cache_read, pdf_tokens_cache_write, pdf_cost_total FROM reportes WHERE id = 1"
+    )
+    .get();
+  assert.deepEqual(row, {
+    pdf_tokens_input: 300,
+    pdf_tokens_output: 75,
+    pdf_tokens_reasoning: 15,
+    pdf_tokens_total: 1500,
+    pdf_tokens_cache_read: 1000,
+    pdf_tokens_cache_write: 3,
+    pdf_cost_total: 0.0168,
+  });
+});
+
 test("generator marks error when normalized json is invalid", async () => {
   const root = makeDir();
   const binDir = path.join(root, "bin");

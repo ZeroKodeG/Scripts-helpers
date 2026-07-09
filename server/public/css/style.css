@@ -652,6 +652,19 @@ td.mono .server-name-wrapper svg {
   flex-wrap: wrap;
 }
 
+.pdf-metrics {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.pdf-metrics span {
+  font-family: var(--font-mono);
+}
+
 /* Subida de PDF */
 .pdf-form {
   display: inline-flex;

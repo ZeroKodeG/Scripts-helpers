@@ -25,6 +25,11 @@ function sanitizeSegment(value) {
   return String(value).replace(/[^A-Za-z0-9._-]/g, "_");
 }
 
+function formatPdfCost(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(4) : null;
+}
+
 const pdfUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
@@ -66,16 +71,21 @@ router.get("/dashboard", requireSession, (req, res) => {
   const reportes = (equipoFiltro
     ? db
         .prepare(
-          "SELECT id, equipo, fecha_hora, pdf_path, pdf_status, pdf_error FROM reportes WHERE equipo = ? ORDER BY fecha_hora DESC"
+          `SELECT id, equipo, fecha_hora, pdf_path, pdf_status, pdf_error,
+                  pdf_tokens_input, pdf_tokens_output, pdf_cost_total
+           FROM reportes WHERE equipo = ? ORDER BY fecha_hora DESC`
         )
         .all(equipoFiltro)
     : db
         .prepare(
-          "SELECT id, equipo, fecha_hora, pdf_path, pdf_status, pdf_error FROM reportes ORDER BY fecha_hora DESC"
+          `SELECT id, equipo, fecha_hora, pdf_path, pdf_status, pdf_error,
+                  pdf_tokens_input, pdf_tokens_output, pdf_cost_total
+           FROM reportes ORDER BY fecha_hora DESC`
         )
         .all()).map((reporte) => ({
     ...reporte,
     fecha_hora_local: formatDateTimeForDisplay(reporte.fecha_hora),
+    pdf_cost_total_display: formatPdfCost(reporte.pdf_cost_total),
   }));
 
   res.render("dashboard", { equipos, reportes, equipoFiltro });

@@ -141,6 +141,7 @@
                 </a>
               </td>
               <td>
+                <% const tieneMetricasPdf = Number.isFinite(Number(r.pdf_tokens_input)) || Number.isFinite(Number(r.pdf_tokens_output)) || Number.isFinite(Number(r.pdf_cost_total)); %>
                 <% if (r.pdf_status === "listo" && r.pdf_path) { %>
                   <div class="pdf-actions">
                     <a class="badge badge-ok" href="/reportes/<%= r.id %>/pdf">
@@ -156,6 +157,13 @@
                       </button>
                     </form>
                   </div>
+                  <% if (tieneMetricasPdf) { %>
+                    <div class="pdf-metrics">
+                      <% if (Number.isFinite(Number(r.pdf_tokens_input))) { %><span>Input Tokens: <%= Number(r.pdf_tokens_input).toLocaleString('en-US') %></span><% } %>
+                      <% if (Number.isFinite(Number(r.pdf_tokens_output))) { %><span>Output Tokens: <%= Number(r.pdf_tokens_output).toLocaleString('en-US') %></span><% } %>
+                      <% if (r.pdf_cost_total_display) { %><span>Costo aprox: $<%= r.pdf_cost_total_display %></span><% } %>
+                    </div>
+                  <% } %>
                 <% } else if (r.pdf_status === "generando") { %>
                   <span class="badge badge-pending">
                     <!-- Loading Spinner -->
@@ -177,6 +185,13 @@
                       </button>
                     </form>
                   </div>
+                  <% if (tieneMetricasPdf) { %>
+                    <div class="pdf-metrics">
+                      <% if (Number.isFinite(Number(r.pdf_tokens_input))) { %><span>Input Tokens: <%= Number(r.pdf_tokens_input).toLocaleString('en-US') %></span><% } %>
+                      <% if (Number.isFinite(Number(r.pdf_tokens_output))) { %><span>Output Tokens: <%= Number(r.pdf_tokens_output).toLocaleString('en-US') %></span><% } %>
+                      <% if (r.pdf_cost_total_display) { %><span>Costo aprox: $<%= r.pdf_cost_total_display %></span><% } %>
+                    </div>
+                  <% } %>
                 <% } else { %>
                   <div class="pdf-pending">
                     <form class="inline-form" method="post" action="/reportes/<%= r.id %>/generar-pdf">

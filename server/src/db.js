@@ -31,6 +31,34 @@ function ensureReportesSchema(db) {
   if (!hasColumn(db, "reportes", "pdf_error")) {
     db.exec("ALTER TABLE reportes ADD COLUMN pdf_error TEXT");
   }
+
+  if (!hasColumn(db, "reportes", "pdf_tokens_input")) {
+    db.exec("ALTER TABLE reportes ADD COLUMN pdf_tokens_input INTEGER");
+  }
+
+  if (!hasColumn(db, "reportes", "pdf_tokens_output")) {
+    db.exec("ALTER TABLE reportes ADD COLUMN pdf_tokens_output INTEGER");
+  }
+
+  if (!hasColumn(db, "reportes", "pdf_tokens_reasoning")) {
+    db.exec("ALTER TABLE reportes ADD COLUMN pdf_tokens_reasoning INTEGER");
+  }
+
+  if (!hasColumn(db, "reportes", "pdf_tokens_total")) {
+    db.exec("ALTER TABLE reportes ADD COLUMN pdf_tokens_total INTEGER");
+  }
+
+  if (!hasColumn(db, "reportes", "pdf_tokens_cache_read")) {
+    db.exec("ALTER TABLE reportes ADD COLUMN pdf_tokens_cache_read INTEGER");
+  }
+
+  if (!hasColumn(db, "reportes", "pdf_tokens_cache_write")) {
+    db.exec("ALTER TABLE reportes ADD COLUMN pdf_tokens_cache_write INTEGER");
+  }
+
+  if (!hasColumn(db, "reportes", "pdf_cost_total")) {
+    db.exec("ALTER TABLE reportes ADD COLUMN pdf_cost_total REAL");
+  }
 }
 
 const db = new Database(dbPath);

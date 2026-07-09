@@ -34,6 +34,76 @@ function truncateTail(value, maxLength = OUTPUT_TAIL_LIMIT) {
   return text.slice(text.length - maxLength);
 }
 
+function createEmptyUsageMetrics() {
+  return {
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    total: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: 0,
+  };
+}
+
+function addNumber(target, key, value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    target[key] += numeric;
+  }
+}
+
+function accumulateUsageFromEvent(metrics, event) {
+  if (!event || event.type !== "step_finish" || !event.part) {
+    return;
+  }
+
+  const tokens = event.part.tokens || {};
+  const cache = tokens.cache || {};
+  addNumber(metrics, "input", tokens.input);
+  addNumber(metrics, "output", tokens.output);
+  addNumber(metrics, "reasoning", tokens.reasoning);
+  addNumber(metrics, "total", tokens.total);
+  addNumber(metrics, "cacheRead", cache.read);
+  addNumber(metrics, "cacheWrite", cache.write);
+  addNumber(metrics, "cost", event.part.cost);
+}
+
+function consumeJsonLines(buffer, onLine) {
+  let pending = buffer;
+  let lineBreak = pending.indexOf("\n");
+  while (lineBreak >= 0) {
+    const line = pending.slice(0, lineBreak).trim();
+    if (line) {
+      onLine(line);
+    }
+    pending = pending.slice(lineBreak + 1);
+    lineBreak = pending.indexOf("\n");
+  }
+  return pending;
+}
+
+function parseUsageMetricsFromLine(metrics, line) {
+  try {
+    const event = JSON.parse(line);
+    accumulateUsageFromEvent(metrics, event);
+  } catch {
+    // Ignorar lineas que no sean JSON valido de eventos.
+  }
+}
+
+function usageMetricsToDbRow(metrics = createEmptyUsageMetrics()) {
+  return {
+    pdf_tokens_input: metrics.input,
+    pdf_tokens_output: metrics.output,
+    pdf_tokens_reasoning: metrics.reasoning,
+    pdf_tokens_total: metrics.total,
+    pdf_tokens_cache_read: metrics.cacheRead,
+    pdf_tokens_cache_write: metrics.cacheWrite,
+    pdf_cost_total: Number(metrics.cost.toFixed(6)),
+  };
+}
+
 function isPromptReady(prompt) {
   return Boolean(prompt && prompt.trim() && !prompt.includes(PLACEHOLDER));
 }
@@ -104,6 +174,9 @@ function runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs }) {
     let timedOut = false;
     let settled = false;
     let killTimer;
+    let stdoutJsonBuffer = "";
+    let stderrJsonBuffer = "";
+    const usageMetrics = createEmptyUsageMetrics();
 
     function resolveOnce(result) {
       if (settled) {
@@ -129,21 +202,23 @@ function runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs }) {
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString();
       stdout = truncateTail(stdout + text);
+      stdoutJsonBuffer = consumeJsonLines(stdoutJsonBuffer + text, (line) => parseUsageMetricsFromLine(usageMetrics, line));
       process.stdout.write(`${tag} ${text}`);
     });
     child.stderr.on("data", (chunk) => {
       const text = chunk.toString();
       stderr = truncateTail(stderr + text);
+      stderrJsonBuffer = consumeJsonLines(stderrJsonBuffer + text, (line) => parseUsageMetricsFromLine(usageMetrics, line));
       process.stderr.write(`${tag} ${text}`);
     });
     child.on("error", (error) => {
       console.error(`${tag} fallo al lanzar el proceso: ${error.message}`);
-      resolveOnce({ code: null, stdout, stderr: truncateTail(`${stderr}\n${error.message}`), timedOut });
+      resolveOnce({ code: null, stdout, stderr: truncateTail(`${stderr}\n${error.message}`), timedOut, usageMetrics });
     });
     child.on("close", (code) => {
       const elapsedMs = Date.now() - startedAt;
       console.log(`${tag} finalizo code=${code} transcurrido=${elapsedMs}ms${timedOut ? " (timeout)" : ""}`);
-      resolveOnce({ code, stdout, stderr, timedOut });
+      resolveOnce({ code, stdout, stderr, timedOut, usageMetrics });
     });
   });
 }
@@ -166,19 +241,52 @@ function createPdfGenerator(options = {}) {
     "SELECT id, equipo, fecha_hora, reporte_sistema, reporte_red, reporte_logs, pdf_status FROM reportes WHERE id = ?"
   );
   const markGenerating = db.prepare(
-    "UPDATE reportes SET pdf_status = 'generando', pdf_error = NULL WHERE id = ?"
+    `UPDATE reportes
+     SET pdf_status = 'generando',
+         pdf_error = NULL,
+         pdf_tokens_input = NULL,
+         pdf_tokens_output = NULL,
+         pdf_tokens_reasoning = NULL,
+         pdf_tokens_total = NULL,
+         pdf_tokens_cache_read = NULL,
+         pdf_tokens_cache_write = NULL,
+         pdf_cost_total = NULL
+     WHERE id = ?`
   );
   const markReady = db.prepare(
-    "UPDATE reportes SET pdf_path = ?, pdf_status = 'listo', pdf_error = NULL WHERE id = ?"
+    `UPDATE reportes
+     SET pdf_path = ?,
+         pdf_status = 'listo',
+         pdf_error = NULL,
+         pdf_tokens_input = ?,
+         pdf_tokens_output = ?,
+         pdf_tokens_reasoning = ?,
+         pdf_tokens_total = ?,
+         pdf_tokens_cache_read = ?,
+         pdf_tokens_cache_write = ?,
+         pdf_cost_total = ?
+     WHERE id = ?`
   );
   const markError = db.prepare(
-    "UPDATE reportes SET pdf_path = NULL, pdf_status = 'error', pdf_error = ? WHERE id = ?"
+    `UPDATE reportes
+     SET pdf_path = NULL,
+         pdf_status = 'error',
+         pdf_error = ?,
+         pdf_tokens_input = ?,
+         pdf_tokens_output = ?,
+         pdf_tokens_reasoning = ?,
+         pdf_tokens_total = ?,
+         pdf_tokens_cache_read = ?,
+         pdf_tokens_cache_write = ?,
+         pdf_cost_total = ?
+     WHERE id = ?`
   );
 
   async function processReport(id) {
     const tmpRoot = path.join(dataDir, "tmp");
     const pdfDir = path.join(dataDir, "pdfs");
     let workDir;
+    let usageMetrics = createEmptyUsageMetrics();
 
     try {
       const row = getReporte.get(id);
@@ -222,6 +330,7 @@ function createPdfGenerator(options = {}) {
       }
 
       const result = await runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs });
+      usageMetrics = result.usageMetrics || usageMetrics;
       if (result.code !== 0) {
         if (result.timedOut) {
           const tail = truncateTail([result.stderr, result.stdout].filter(Boolean).join("\n"));
@@ -250,9 +359,31 @@ function createPdfGenerator(options = {}) {
 
       const fileName = `${id}.pdf`;
       fs.renameSync(draftPdfPath, path.join(pdfDir, fileName));
-      markReady.run(fileName, id);
+      const dbMetrics = usageMetricsToDbRow(usageMetrics);
+      markReady.run(
+        fileName,
+        dbMetrics.pdf_tokens_input,
+        dbMetrics.pdf_tokens_output,
+        dbMetrics.pdf_tokens_reasoning,
+        dbMetrics.pdf_tokens_total,
+        dbMetrics.pdf_tokens_cache_read,
+        dbMetrics.pdf_tokens_cache_write,
+        dbMetrics.pdf_cost_total,
+        id
+      );
     } catch (error) {
-      markError.run(truncateTail(error.message), id);
+      const dbMetrics = usageMetricsToDbRow(usageMetrics);
+      markError.run(
+        truncateTail(error.message),
+        dbMetrics.pdf_tokens_input,
+        dbMetrics.pdf_tokens_output,
+        dbMetrics.pdf_tokens_reasoning,
+        dbMetrics.pdf_tokens_total,
+        dbMetrics.pdf_tokens_cache_read,
+        dbMetrics.pdf_tokens_cache_write,
+        dbMetrics.pdf_cost_total,
+        id
+      );
     } finally {
       if (workDir) {
         fs.rmSync(workDir, { recursive: true, force: true });
@@ -298,9 +429,12 @@ function createPdfGenerator(options = {}) {
 const defaultGenerator = createPdfGenerator();
 
 module.exports = {
+  accumulateUsageFromEvent,
+  createEmptyUsageMetrics,
   createPdfGenerator,
   buildOpencodeEnv,
   encolarGeneracion: defaultGenerator.encolarGeneracion,
   isPromptReady,
   truncateTail,
+  usageMetricsToDbRow,
 };
