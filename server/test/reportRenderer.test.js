@@ -80,3 +80,87 @@ test("renderer accepts reports with empty optional sections and mandatory final 
   assert.equal(result.code, 0);
   assert.equal(fs.existsSync(outputPath), true);
 });
+
+test("renderer produces branded sections footer and table content", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "renderer-branding-"));
+  const scriptPath = path.join(process.cwd(), "scripts", "render_reporte_ejecutivo.py");
+  const inputPath = path.join(root, "input.json");
+  const outputPath = path.join(root, "out.pdf");
+
+  fs.writeFileSync(
+    inputPath,
+    JSON.stringify(
+      {
+        metadata: {
+          reportTitle: "Auditoria Tecnica de Seguridad - Servidor PR-NOC01OCA",
+          reportId: "PR-NOC01OCA-20260709",
+          organization: "patrimonio.com",
+          equipo: "PR-NOC01OCA",
+          localDate: "2026-07-09",
+          localDateTime: "2026-07-09 10:29:26",
+          timeZone: "America/Monterrey",
+        },
+        sections: {
+          resumen_ejecutivo: {
+            title: "Resumen ejecutivo",
+            summary: "Resumen de hallazgos principales.",
+            blocks: ["Se detectaron servicios expuestos y hallazgos accionables."],
+          },
+          informacion_sistema: {
+            title: "Informacion del sistema",
+            summary: "Datos generales del servidor auditado.",
+            tables: [
+              {
+                title: "Identificacion del servidor",
+                rows: [
+                  { Campo: "Equipo", Valor: "PR-NOC01OCA" },
+                  { Campo: "Sistema operativo", Valor: "Windows Server 2019" },
+                ],
+              },
+            ],
+          },
+          hallazgos_y_recomendaciones: {
+            title: "Hallazgos y recomendaciones",
+            summary: "Cierre final del reporte.",
+            groups: {
+              criticos: [
+                {
+                  severity: "Critico",
+                  title: "RDP expuesto",
+                  evidence: "Puerto 3389 en escucha sobre interfaces accesibles.",
+                  recommendation: "Restringir RDP por origen y revisar firewall.",
+                },
+              ],
+              atencion: [],
+              informativos: [
+                {
+                  severity: "Informativo",
+                  title: "Conectividad al dominio",
+                  evidence: "0% de perdida hacia el controlador cercano.",
+                  recommendation: "Mantener monitoreo periodico.",
+                },
+              ],
+            },
+          },
+        },
+      },
+      null,
+      2
+    )
+  );
+
+  const result = await runRenderer({ scriptPath, inputPath, outputPath, timeoutMs: 5000 });
+  assert.equal(result.code, 0);
+
+  const pdfText = fs.readFileSync(outputPath, "latin1");
+  assert.match(pdfText, /Auditoria Tecnica de Seguridad - Servidor PR-NOC01OCA/);
+  assert.match(pdfText, /Confidencial/);
+  assert.match(pdfText, /Resumen ejecutivo/);
+  assert.match(pdfText, /Informacion del sistema/);
+  assert.match(pdfText, /Hallazgos y recomendaciones/);
+  assert.match(pdfText, /Identificacion del servidor/);
+  assert.match(pdfText, /Campo/);
+  assert.match(pdfText, /Valor/);
+  assert.match(pdfText, /Evidencia/);
+  assert.match(pdfText, /Recomendacion/);
+});
