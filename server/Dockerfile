@@ -32,6 +32,7 @@ COPY src ./src
 COPY scripts ./scripts
 COPY public ./public
 COPY prompts ./prompts
+COPY ejemplos ./ejemplos
 COPY opencode.json ./opencode.json
 
 EXPOSE 3000
