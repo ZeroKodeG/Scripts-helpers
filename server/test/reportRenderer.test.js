@@ -131,7 +131,14 @@ test("renderer produces branded sections footer and table content", async () => 
                   recommendation: "Restringir RDP por origen y revisar firewall.",
                 },
               ],
-              atencion: [],
+              atencion: [
+                {
+                  severity: "Atencion",
+                  title: "WinRM expuesto",
+                  evidence: "Puerto 5985 en escucha.",
+                  recommendation: "Restringir acceso administrativo remoto.",
+                },
+              ],
               informativos: [
                 {
                   severity: "Informativo",
@@ -163,4 +170,74 @@ test("renderer produces branded sections footer and table content", async () => 
   assert.match(pdfText, /Valor/);
   assert.match(pdfText, /Evidencia/);
   assert.match(pdfText, /Recomendacion/);
+  assert.match(pdfText, /Atencion/);
+  assert.match(pdfText, /WinRM expuesto/);
+});
+
+test("renderer colors semantic statuses including Atencion in tables and findings", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "renderer-attn-"));
+  const scriptPath = path.join(process.cwd(), "scripts", "render_reporte_ejecutivo.py");
+  const inputPath = path.join(root, "input.json");
+  const outputPath = path.join(root, "out.pdf");
+
+  fs.writeFileSync(
+    inputPath,
+    JSON.stringify(
+      {
+        metadata: {
+          reportTitle: "Auditoria Tecnica de Seguridad - Servidor DEMO-ATTN",
+          reportId: "DEMO-ATTN-20260714",
+          organization: "demo.local",
+          equipo: "DEMO-ATTN",
+          localDate: "2026-07-14",
+          localDateTime: "2026-07-14 16:00:00",
+          timeZone: "America/Monterrey",
+        },
+        sections: {
+          resumen_ejecutivo: {
+            title: "Resumen ejecutivo",
+            summary: "Tabla de indicadores con estados semanticos.",
+            tables: [
+              {
+                title: "Indicadores de riesgo",
+                rows: [
+                  { Indicador: "Firewall", Valor: "Off", Estado: "Critico" },
+                  { Indicador: "RDP", Valor: "3389", Estado: "Atencion" },
+                  { Indicador: "Dominio", Valor: "OK", Estado: "OK" },
+                ],
+              },
+            ],
+          },
+          hallazgos_y_recomendaciones: {
+            title: "Hallazgos y recomendaciones",
+            summary: "Incluye severidad Atencion.",
+            groups: {
+              criticos: [],
+              atencion: [
+                {
+                  severity: "Atencion",
+                  title: "RDP sin restriccion de origen",
+                  evidence: "Puerto 3389 en escucha.",
+                  recommendation: "Limitar origenes permitidos.",
+                },
+              ],
+              informativos: [],
+            },
+          },
+        },
+      },
+      null,
+      2
+    )
+  );
+
+  const result = await runRenderer({ scriptPath, inputPath, outputPath, timeoutMs: 5000 });
+  assert.equal(result.code, 0);
+  assert.equal(fs.existsSync(outputPath), true);
+
+  const pdfText = fs.readFileSync(outputPath, "latin1");
+  assert.match(pdfText, /Indicadores de riesgo/);
+  assert.match(pdfText, /Critico/);
+  assert.match(pdfText, /Atencion/);
+  assert.match(pdfText, /RDP sin restriccion de origen/);
 });

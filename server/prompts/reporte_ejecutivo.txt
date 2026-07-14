@@ -2,6 +2,7 @@ Genera un archivo llamado `reporte_normalizado.json` en el directorio de trabajo
 
 Tu unica salida valida es ese archivo JSON. No generes PDF. No generes Markdown.
 No imprimas el reporte final en texto libre. No agregues secciones nuevas.
+No ejecutes ni adaptes scripts Python como salida.
 
 ===================================================
 OBJETIVO
@@ -15,6 +16,25 @@ Vas a leer estos archivos del directorio de trabajo:
 - `reporte_metadata.json`
 
 Debes consolidar su contenido en un JSON canonico para un renderer posterior.
+
+===================================================
+REFERENCIA OPCIONAL DE ESTILO
+===================================================
+
+En el directorio de trabajo tambien esta `plantilla_reporte_corporativo.py`.
+
+Puedes basarte en ese archivo SOLO para:
+- paleta de colores y tipografia corporativa
+- estilo de tablas (cabecera, zebra, bordes, colores semanticos de celdas)
+- formato visual de hallazgos (prefijos Critico / Atencion / Informativo)
+- patrones de librerias/estilos ReportLab
+
+NO tomes de ese archivo:
+- el orden ni los nombres de secciones
+- el contenido dummy de ejemplo
+- la idea de generar PDF directamente
+
+La estructura canonica del reporte es EXCLUSIVAMENTE el catalogo de secciones y el formato JSON definidos en este prompt.
 
 ===================================================
 REGLAS ESTRICTAS
@@ -69,7 +89,17 @@ El JSON debe tener esta forma general:
     "resumen_ejecutivo": {
       "title": "Resumen ejecutivo",
       "summary": "Texto corto de 2 a 4 lineas",
-      "blocks": ["Parrafo 1", "Parrafo 2"]
+      "blocks": ["Parrafo 1", "Parrafo 2"],
+      "tables": [
+        {
+          "title": "Indicadores de riesgo",
+          "rows": [
+            {"Indicador": "Firewall local", "Valor": "Desactivado", "Estado": "Critico"},
+            {"Indicador": "RDP expuesto", "Valor": "Puerto 3389 en escucha", "Estado": "Atencion"},
+            {"Indicador": "Conectividad a dominio", "Valor": "Responde", "Estado": "OK"}
+          ]
+        }
+      ]
     },
     "informacion_sistema": {
       "title": "Informacion del sistema",
@@ -116,9 +146,17 @@ DETALLES DE CONTENIDO
 
 Para las secciones 1-9:
 - Usa `title` con el nombre visible normalizado en espanol.
-- Usa `summary` para explicar brevemente que contiene la seccion y su hallazgo principal.
+- Usa `summary` para explicar brevemente que contiene la seccion y su hallazgo principal (2 a 4 lineas).
 - Usa `blocks` para texto adicional breve.
-- Usa `tables` solo si hay datos tabulares utiles.
+- Usa `tables` solo si hay datos tabulares utiles. Cuando haya subtemas, pon un `title` en cada tabla.
+- En tablas de riesgo o estado, usa valores exactos en la columna `Estado` o `Severidad`:
+  `OK`, `Atencion` o `Critico` (el renderer aplica color semantico a esos tokens).
+
+Para `resumen_ejecutivo`:
+- Incluye siempre que haya evidencia una tabla de indicadores con columnas
+  `Indicador`, `Valor` y `Estado`.
+- Los indicadores deben ser de auditoria (firewall, RDP, cuentas privilegiadas,
+  logons fallidos 4625, puertos en escucha, etc.), no KPIs genericos de operaciones.
 
 Para la seccion `hallazgos_y_recomendaciones`:
 - Siempre debe existir.

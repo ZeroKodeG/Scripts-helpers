@@ -62,10 +62,16 @@ test("generator creates report files, stores rendered pdf, and cleans work dir",
       "Path(sys.argv[2]).write_bytes(b'%PDF-1.4 fake pdf')",
     ].join("\n")
   );
+  const plantillaScriptPath = path.join(root, "plantilla_reporte_corporativo.py");
+  fs.writeFileSync(plantillaScriptPath, "# plantilla estilo\n");
   makeFakeOpencode(
     binDir,
     `#!/usr/bin/env node
 const fs = require("node:fs");
+if (!fs.existsSync("plantilla_reporte_corporativo.py")) {
+  console.error("missing plantilla_reporte_corporativo.py");
+  process.exit(2);
+}
 fs.writeFileSync("reporte_normalizado.json", JSON.stringify({
   metadata: {
     reportTitle: "Titulo",
@@ -103,6 +109,7 @@ process.exit(0);
     dataDir,
     promptPath,
     rendererScriptPath,
+    plantillaScriptPath,
     env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
     timeoutMs: 5000,
   });
@@ -115,6 +122,34 @@ process.exit(0);
   assert.deepEqual(row, { pdf_status: "listo", pdf_error: null, pdf_path: "1.pdf" });
   assert.equal(fs.existsSync(path.join(dataDir, "pdfs", "1.pdf")), true);
   assert.equal(fs.readdirSync(path.join(dataDir, "tmp")).length, 0);
+});
+
+test("generator marks error when plantilla de estilo is missing", async () => {
+  const root = makeDir();
+  const binDir = path.join(root, "bin");
+  const dataDir = path.join(root, "data");
+  const promptPath = path.join(root, "prompt.txt");
+  const missingPlantilla = path.join(root, "missing_plantilla.py");
+  fs.mkdirSync(binDir);
+  fs.mkdirSync(dataDir);
+  fs.writeFileSync(promptPath, "Extrae un reporte normalizado en JSON.");
+
+  const db = makeDb();
+  const generator = createPdfGenerator({
+    db,
+    dataDir,
+    promptPath,
+    plantillaScriptPath: missingPlantilla,
+    env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, OPENCODE_MODEL: "test/model" },
+    timeoutMs: 5000,
+  });
+
+  assert.equal(generator.encolarGeneracion(1), true);
+  await generator.drain();
+
+  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes WHERE id = 1").get();
+  assert.equal(row.pdf_status, "error");
+  assert.match(row.pdf_error, /plantilla de estilo corporativo/i);
 });
 
 test("generator marks error when opencode does not produce reporte_normalizado.json", async () => {

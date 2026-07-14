@@ -4,8 +4,8 @@ server/data/*.db-journal
 server/data/*.db-wal
 server/data/*.db-shm
 server/data/pdfs/*
-server/ejemplos
 !server/data/pdfs/.gitkeep
+server/ejemplos/*.pdf
 server/.env
 .playwright-mcp
 .worktrees

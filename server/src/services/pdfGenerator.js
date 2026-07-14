@@ -228,6 +228,9 @@ function createPdfGenerator(options = {}) {
   const dataDir = options.dataDir || path.join(__dirname, "..", "..", "data");
   const promptPath = options.promptPath || path.join(__dirname, "..", "..", "prompts", "reporte_ejecutivo.txt");
   const rendererScriptPath = options.rendererScriptPath || path.join(__dirname, "..", "..", "scripts", "render_reporte_ejecutivo.py");
+  const plantillaScriptPath =
+    options.plantillaScriptPath ||
+    path.join(__dirname, "..", "..", "ejemplos", "plantilla_reporte_corporativo.py");
   const opencodeConfigPath = options.opencodeConfigPath || path.join(__dirname, "..", "..", "opencode.json");
   const env = buildOpencodeEnv(options.env || process.env);
   const timeoutMs = options.timeoutMs || Number(env.OPENCODE_TIMEOUT_MS) || 10 * 60 * 1000;
@@ -303,6 +306,10 @@ function createPdfGenerator(options = {}) {
         throw new Error("El prompt para generar el PDF no esta configurado");
       }
 
+      if (!fs.existsSync(plantillaScriptPath)) {
+        throw new Error("La plantilla de estilo corporativo no existe o no esta configurada");
+      }
+
       if (!env.OPENCODE_MODEL || !env.OPENCODE_MODEL.trim()) {
         throw new Error("Falta configurar OPENCODE_MODEL en el entorno");
       }
@@ -324,6 +331,7 @@ function createPdfGenerator(options = {}) {
           2
         )
       );
+      fs.copyFileSync(plantillaScriptPath, path.join(workDir, "plantilla_reporte_corporativo.py"));
 
       if (fs.existsSync(opencodeConfigPath)) {
         fs.copyFileSync(opencodeConfigPath, path.join(workDir, "opencode.json"));

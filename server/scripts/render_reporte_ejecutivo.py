@@ -40,6 +40,7 @@ ACCENT = colors.HexColor("#2B6CB0")
 ROW_HDR = colors.HexColor("#E2E8F0")
 ROW_ALT = colors.HexColor("#F5F7FA")
 WARN = colors.HexColor("#C53030")
+ATTN = colors.HexColor("#B7791F")
 INFO_CLR = colors.HexColor("#276749")
 
 CONFIDENTIAL_TEXT = "Confidencial - Uso interno de TI"
@@ -174,6 +175,14 @@ def build_styles():
             leading=10,
             textColor=WARN,
         ),
+        "table_cell_attn": ParagraphStyle(
+            "TableCellAttn",
+            parent=base["BodyText"],
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=10,
+            textColor=ATTN,
+        ),
         "table_cell_ok": ParagraphStyle(
             "TableCellOk",
             parent=base["BodyText"],
@@ -240,11 +249,25 @@ def draw_header_footer(canvas, doc, metadata):
     canvas.restoreState()
 
 
+STATUS_EXACT = {
+    "critico": "table_cell_warn",
+    "atencion": "table_cell_attn",
+    "atención": "table_cell_attn",
+    "ok": "table_cell_ok",
+    "informativo": "table_cell_ok",
+}
+
+
 def style_for_text(value, styles):
-    text = str(value)
+    text = str(value).strip()
     lowered = text.lower()
+    exact_style = STATUS_EXACT.get(lowered)
+    if exact_style:
+        return styles[exact_style]
     if any(token in lowered for token in ["critico", "desactivado", "alto", "error", "fallo", "expuesto", "denegado"]):
         return styles["table_cell_warn"]
+    if any(token in lowered for token in ["atencion", "atención"]):
+        return styles["table_cell_attn"]
     if any(token in lowered for token in ["ok", "sin incidencias", "habilitado", "correcta", "conforme", "activo"]):
         return styles["table_cell_ok"]
     if TECHNICAL_PATTERN.search(text):
@@ -359,6 +382,8 @@ def build_hallazgo_flowables(item, styles):
     title_style = styles["hallazgo_title"]
     if severity == "Critico":
         title_style = ParagraphStyle("HallazgoCritico", parent=styles["hallazgo_title"], textColor=WARN)
+    elif severity == "Atencion":
+        title_style = ParagraphStyle("HallazgoAtencion", parent=styles["hallazgo_title"], textColor=ATTN)
     elif severity == "Informativo":
         title_style = ParagraphStyle("HallazgoInformativo", parent=styles["hallazgo_title"], textColor=INFO_CLR)
 
