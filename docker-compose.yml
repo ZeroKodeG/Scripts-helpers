@@ -1,19 +1,49 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: auditoria-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-auditoria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-auditoria}
+      POSTGRES_DB: ${POSTGRES_DB:-auditoria}
+    volumes:
+      - auditoria_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-auditoria} -d ${POSTGRES_DB:-auditoria}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./server
     container_name: auditoria-backend
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./server/.env
     environment:
-      - API_KEY=${API_KEY}
-      - PORT=${PORT}
-      - DB_PATH=${DB_PATH}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - OPENCODE_MODEL=${OPENCODE_MODEL}
-      - OPENCODE_TIMEOUT_MS=${OPENCODE_TIMEOUT_MS}
-      - ZAI_API_KEY=${ZAI_API_KEY}
+      # Forzar Postgres interno aunque .env tenga DATABASE_URL de desarrollo local
+      DATABASE_URL: postgresql://${POSTGRES_USER:-auditoria}:${POSTGRES_PASSWORD:-auditoria}@postgres:5432/${POSTGRES_DB:-auditoria}
+      PORT: ${PORT:-3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      
     volumes:
       - auditoria_data:/app/data
 
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    container_name: auditoria-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+
 volumes:
+  auditoria_pg:
   auditoria_data:

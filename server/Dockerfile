@@ -1,15 +1,9 @@
-# ---- deps: instala dependencias y compila el binding nativo de better-sqlite3 ----
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
-    && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev || npm install --omit=dev
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-
-# ---- runtime: imagen final, sin herramientas de compilacion ----
 FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production \

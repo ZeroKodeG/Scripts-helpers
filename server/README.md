@@ -1,110 +1,102 @@
-# Backend de auditoria
+# Backend + stack de auditoria
 
-API + dashboard web para centralizar los reportes generados por `ejecutar_auditoria.bat` en cada servidor.
+API JSON (Express + PostgreSQL) y frontend React separado. Los scripts Windows siguen subiendo reportes con `X-API-Key`.
 
-## Levantar con Docker Compose (recomendado, mas rapido)
+## Arquitectura (Docker Compose)
 
-Requiere Docker + Docker Compose. Desde la raiz del repo:
+Servicios en la raiz del repo (`docker-compose.yml`):
 
-```
+| Servicio    | Puerto por defecto | Rol                                      |
+|-------------|--------------------|------------------------------------------|
+| `postgres`  | 5432               | Persistencia                             |
+| `backend`   | 3000               | API, scripts `/scripts`, generacion PDF  |
+| `frontend`  | 8080               | Dashboard React (nginx)                  |
+
+No incluye reverse proxy/TLS: apunta tus dominios (ej. `api.` → 3000, `app.` → 8080) desde Traefik/Cloudflare/nginx externo.
+
+## Levantar
+
+```bash
 cd server
 cp .env.example .env
-# editar .env: definir API_KEY, SESSION_SECRET, OPENCODE_MODEL,
-# BITFROST_BASE_URL, BITFROST_API_KEY y OPENCODE_TIMEOUT_MS
+# editar: API_KEY, JWT_SECRET, OPENCODE_MODEL, ZAI_API_KEY, CORS_ORIGIN, VITE_API_URL
 cd ..
 docker compose up -d --build
 ```
 
-Queda en `http://localhost:3000`. Los datos (SQLite + PDFs) persisten en el volumen nombrado `auditoria_data` (montado en `/app/data`), asi que sobreviven a `docker compose down` y a reconstruir el contenedor.
+- Frontend: `http://localhost:8080`
+- API: `http://localhost:3000`
+- Scripts: `http://localhost:3000/scripts/ejecutar_auditoria.bat`
 
-Comandos utiles:
-```
-docker compose logs -f        # ver logs
-docker compose down           # parar (no borra los datos)
-docker compose up -d --build  # reconstruir tras cambios de codigo
-```
+`API_KEY` del `.env` **solo se usa como seed** del primer usuario `admin` si la tabla `usuarios` esta vacia. Despues las keys viven en Postgres.
 
-## Desarrollo local sin Docker
+`VITE_API_URL` se congela en el **build** del frontend: debe ser la URL publica del API que ve el navegador.
 
-```
-cd server
-npm install
-cp .env.example .env
-# editar .env: definir API_KEY, SESSION_SECRET, OPENCODE_MODEL,
-# BITFROST_BASE_URL, BITFROST_API_KEY y OPENCODE_TIMEOUT_MS
-npm start
-```
+## Roles
 
-Por defecto queda en `http://localhost:3000`.
+| Rol        | Puede                                              |
+|------------|----------------------------------------------------|
+| `admin`    | Todo: reportes, generar/subir PDF, usuarios, prompt |
+| `consulta` | Login, listar/filtrar, descargar TXT/PDF           |
 
-## Endpoints
+Login web: `POST /api/auth/login` con `{ "api_key": "..." }` → JWT Bearer.
 
-- Dashboard web: `http://localhost:3000/login` (pedir la misma API KEY del `.env`).
-- Scripts cliente: `http://localhost:3000/scripts/ejecutar_auditoria.bat` (y los 3 modulos), servidos sin auth desde `public/scripts/`. No tienen secretos, asi que no hace falta protegerlos; lo unico protegido es la subida de reportes.
-- `GET /healthz` — sin auth, usado por el `HEALTHCHECK` del Dockerfile.
-- API para el script cliente:
-  - `POST /api/reportes` — header `X-API-Key`, body `multipart/form-data` con `equipo`, `reporte_sistema`, `reporte_red`, `reporte_logs`.
-  - `GET /api/equipos` — header `X-API-Key`, lista de equipos distintos.
-  - `GET /api/reportes?equipo=NOMBRE` — header `X-API-Key`, lista de corridas ordenadas por fecha DESC.
+Upload desde `.bat`: header `X-API-Key` de un **admin** activo → `POST /api/reportes`.
 
-Prueba manual:
-```
-curl -X POST http://localhost:3000/api/reportes \
-  -H "X-API-Key: TU_API_KEY" \
-  -F "equipo=PRUEBA" \
-  -F "reporte_sistema=contenido de prueba" \
-  -F "reporte_red=contenido de prueba" \
-  -F "reporte_logs=contenido de prueba"
-```
+## Endpoints principales
+
+- `GET /healthz` — healthcheck
+- `POST /api/auth/login`, `GET /api/auth/me`
+- `GET /api/equipos` — JWT
+- `GET /api/reportes?equipo=&fecha_desde=&fecha_hasta=&estado_pdf=` — JWT  
+  `estado_pdf`: `todos` \| `generados` \| `pendientes`
+- `POST /api/reportes` — X-API-Key admin
+- `GET /api/reportes/:id/{sistema|red|logs|pdf}` — JWT
+- `POST /api/reportes/:id/generar-pdf`, `POST /api/reportes/:id/pdf` — JWT admin
+- `GET|POST|PATCH|DELETE /api/usuarios`, `POST .../regenerar-key` — JWT admin
+- `GET|PUT /api/prompts/reporte_ejecutivo` — JWT admin
 
 ## Datos
 
-- SQLite en `data/auditoria.db` (una fila por corrida: equipo, fecha_hora, los 3 textos de reporte, ruta del PDF si se subio).
-- PDFs subidos manualmente desde el dashboard en `data/pdfs/<id>.pdf`.
-- Ambos quedan fuera de git (ver `.gitignore` en la raiz del repo) y, con Docker, persisten en el volumen nombrado `auditoria_data` (definido en `docker-compose.yml`).
+- Postgres: tablas `reportes`, `usuarios`, `prompts`
+- PDFs en volumen `auditoria_data` → `/app/data/pdfs`
+- Prompt: se seed desde `prompts/reporte_ejecutivo.txt` si no existe en BD; luego se edita por web
 
-## Generacion automatica de PDF
+### Migrar SQLite antiguo → Postgres
 
-El dashboard permite generar un PDF ejecutivo desde cada fila con el boton `Generar PDF`. El backend encola la generacion, escribe los tres reportes en un directorio temporal y ejecuta `opencode run --auto` con el prompt versionado en `prompts/reporte_ejecutivo.txt`. La imagen incluye Python 3 y las librerias de `requirements.txt` (reportlab, fpdf2, pandas, openpyxl, matplotlib, Pillow) para que el modelo pueda generar el PDF y procesar CSV/datos dentro del directorio temporal.
+```bash
+cd server
+npm i better-sqlite3 --no-save --registry https://registry.npmjs.org/
+DATABASE_URL=postgresql://auditoria:auditoria@localhost:5432/auditoria \
+  SQLITE_PATH=./data/auditoria.db \
+  npm run migrate:sqlite
+```
 
-Variables requeridas en `.env`:
+Los PDF en `data/pdfs/` se reutilizan tal cual.
 
-- `OPENCODE_MODEL`: modelo en formato `provider/modelo`, por ejemplo `zai/glm-5.1` (tambien `zai/glm-5.2`).
-- `OPENCODE_TIMEOUT_MS`: timeout del proceso, por defecto `600000`.
-- `ZAI_API_KEY`: API key del Coding Plan de ZAI (z.ai). Debe ser la key especifica del Coding Plan, no una key normal de la plataforma.
+## Desarrollo local
 
-La configuracion del proveedor (baseURL del Coding Plan `https://api.z.ai/api/coding/paas/v4`, paquete npm, definicion de modelos) vive en `opencode.json` versionado en el repo. El secreto (`ZAI_API_KEY`) se interpola en runtime via `{env:ZAI_API_KEY}` en el header `Authorization: Bearer` — no hay secretos en el archivo. Para cambiar de modelo, editar `.env` (`OPENCODE_MODEL`) o `opencode.json` (modelos disponibles).
+Backend (Postgres local o compose solo DB):
 
-Antes de usarlo en produccion, reemplazar el marcador `REEMPLAZAR_PROMPT_EJECUTIVO` en `prompts/reporte_ejecutivo.txt` por el prompt final. Mientras el marcador siga presente, la generacion falla a proposito con un error visible en el dashboard.
+```bash
+cd server
+npm install
+cp .env.example .env
+# DATABASE_URL apuntando a Postgres
+npm run dev
+```
 
-El estado se guarda en SQLite:
+Frontend:
 
-- `pendiente`: todavia no se genero PDF.
-- `generando`: opencode esta corriendo o el reporte esta en cola.
-- `listo`: existe `data/pdfs/<id>.pdf` y el dashboard muestra el link de descarga.
-- `error`: la generacion fallo y se puede reintentar desde el dashboard.
+```bash
+cd frontend
+npm install
+# VITE_API_URL=http://localhost:3000
+npm run dev
+```
 
-## Nota de seguridad sobre opencode
+Tests backend: `cd server && npm test`
 
-La generacion automatica usa `opencode run --auto`. Eso permite que opencode apruebe permisos y ejecute codigo generado por el LLM dentro del VPS.
+## Generacion de PDF
 
-**Riesgo principal - inyeccion de prompts:** los tres reportes `.txt` llegan desde servidores remotos via la API key compartida y se entregan al LLM como parte del prompt. Un servidor comprometido puede embeber instrucciones maliciosas dentro de su reporte (prompt injection) para que el modelo ejecute codigo no deseado aprovechando los permisos del `--auto`. Este proyecto no agrega sandboxing fuerte: el directorio temporal por reporte es solo aislamiento de archivos/workspace, **no** una frontera de ejecucion; con `--auto`, el codigo que opencode ejecuta puede alcanzar todo lo que pueda el usuario del backend.
-
-Las mitigaciones actuales son un directorio temporal por reporte (aislamiento de workspace, no de ejecucion), timeout del proceso y cola con concurrencia 1. Usar esta funcion solo con prompts propios y reportes de origen confiable.
-
-## Despliegue en VPS
-
-**Opcion A — Docker Compose (recomendado):**
-1. Clonar el repo en el VPS, `docker compose pull` no aplica (imagen se construye local): `docker compose build`.
-2. Crear `server/.env` con `API_KEY` y `SESSION_SECRET` propios (no reusar los de ejemplo). `PORT`/`DB_PATH` estan fijados en `docker-compose.yml`, no hace falta tocarlos.
-3. `docker compose up -d`. El contenedor reinicia solo (`restart: unless-stopped`) si el VPS reinicia o el proceso cae.
-4. Si se expone a internet, poner nginx (u otro reverse proxy) delante con HTTPS (Let's Encrypt/certbot) — no incluido en este proyecto.
-5. Actualizar `AUDIT_API_URL` / `.audit_config` en cada servidor Windows para que apunte a esta URL.
-
-> **Dokploy / PaaS:** el `docker-compose.yml` usa el volumen nombrado `auditoria_data` (no un bind mount relativo) precisamente para que la BD y los PDFs persistan entre deploys. Si tu proveedor permite editar el compose o montar volumenes persistentes, asegurate de que el volumen nombrado se respete; un bind mount tipo `./server/data` se pierde al recrear el directorio de build en cada deploy.
-
-**Opcion B — Node directo (sin Docker):**
-1. Clonar el repo en el VPS, `cd server && npm install --production`.
-2. Crear `.env` con `API_KEY`, `SESSION_SECRET` y `PORT` propios.
-3. Correr con `pm2 start src/index.js --name auditoria-backend` (o un servicio systemd equivalente) para que sobreviva reinicios.
-4. Mismos pasos 4 y 5 que en la Opcion A.
+Igual que antes (`opencode` + renderer Python). El prompt se lee desde la tabla `prompts` (`clave = reporte_ejecutivo`). Variables: `OPENCODE_MODEL`, `OPENCODE_TIMEOUT_MS`, `ZAI_API_KEY`.

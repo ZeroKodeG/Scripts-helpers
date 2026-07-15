@@ -1,47 +1,34 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
-const Database = require("better-sqlite3");
 
-const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "db-test-"));
-process.env.DB_PATH = path.join(testRoot, "auditoria.db");
+process.env.NODE_ENV = "test";
 
-const { ensureReportesSchema } = require("../src/db");
+const { buildReportesFilters } = require("../src/routes/reportes");
+const { hashApiKey, generateApiKey } = require("../src/auth");
 
-function columns(db) {
-  return db.prepare("PRAGMA table_info(reportes)").all().map((column) => column.name);
-}
-
-test("ensureReportesSchema creates pdf status columns", () => {
-  const db = new Database(":memory:");
-
-  ensureReportesSchema(db);
-
-  const names = columns(db);
-  assert.ok(names.includes("pdf_status"));
-  assert.ok(names.includes("pdf_error"));
-  assert.ok(names.includes("pdf_tokens_input"));
-  assert.ok(names.includes("pdf_tokens_output"));
-  assert.ok(names.includes("pdf_cost_total"));
-
-  const row = db
-    .prepare("SELECT pdf_status, pdf_error, pdf_tokens_input, pdf_tokens_output, pdf_cost_total FROM reportes")
-    .get();
-  assert.equal(row, undefined);
+test("hashApiKey es determinista y generaApiKey produce keys largas", () => {
+  assert.equal(hashApiKey("abc"), hashApiKey("abc"));
+  assert.notEqual(hashApiKey("abc"), hashApiKey("xyz"));
+  assert.equal(generateApiKey().length, 64);
 });
 
-test("ensureReportesSchema can run more than once", () => {
-  const db = new Database(":memory:");
+test("buildReportesFilters combina equipo, fechas y estado_pdf", () => {
+  const empty = buildReportesFilters({});
+  assert.equal(empty.where, "");
+  assert.deepEqual(empty.params, []);
 
-  ensureReportesSchema(db);
-  ensureReportesSchema(db);
+  const generados = buildReportesFilters({
+    equipo: "SRV1",
+    fecha_desde: "2026-01-01",
+    fecha_hasta: "2026-01-31",
+    estado_pdf: "generados",
+  });
+  assert.match(generados.where, /equipo = \$1/);
+  assert.match(generados.where, /fecha_hora::date >= \$2::date/);
+  assert.match(generados.where, /fecha_hora::date <= \$3::date/);
+  assert.match(generados.where, /pdf_status = 'listo'/);
+  assert.deepEqual(generados.params, ["SRV1", "2026-01-01", "2026-01-31"]);
 
-  const names = columns(db);
-  assert.equal(names.filter((name) => name === "pdf_status").length, 1);
-  assert.equal(names.filter((name) => name === "pdf_error").length, 1);
-  assert.equal(names.filter((name) => name === "pdf_tokens_input").length, 1);
-  assert.equal(names.filter((name) => name === "pdf_tokens_output").length, 1);
-  assert.equal(names.filter((name) => name === "pdf_cost_total").length, 1);
+  const pendientes = buildReportesFilters({ estado_pdf: "pendientes" });
+  assert.match(pendientes.where, /pdf_status IN \('pendiente', 'generando', 'error'\)/);
 });

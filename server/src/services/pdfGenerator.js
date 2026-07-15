@@ -202,88 +202,168 @@ function runOpencode({ id, workDir, prompt, env, timeoutMs, killGraceMs }) {
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString();
       stdout = truncateTail(stdout + text);
-      stdoutJsonBuffer = consumeJsonLines(stdoutJsonBuffer + text, (line) => parseUsageMetricsFromLine(usageMetrics, line));
+      stdoutJsonBuffer = consumeJsonLines(stdoutJsonBuffer + text, (line) =>
+        parseUsageMetricsFromLine(usageMetrics, line)
+      );
       process.stdout.write(`${tag} ${text}`);
     });
     child.stderr.on("data", (chunk) => {
       const text = chunk.toString();
       stderr = truncateTail(stderr + text);
-      stderrJsonBuffer = consumeJsonLines(stderrJsonBuffer + text, (line) => parseUsageMetricsFromLine(usageMetrics, line));
+      stderrJsonBuffer = consumeJsonLines(stderrJsonBuffer + text, (line) =>
+        parseUsageMetricsFromLine(usageMetrics, line)
+      );
       process.stderr.write(`${tag} ${text}`);
     });
     child.on("error", (error) => {
       console.error(`${tag} fallo al lanzar el proceso: ${error.message}`);
-      resolveOnce({ code: null, stdout, stderr: truncateTail(`${stderr}\n${error.message}`), timedOut, usageMetrics });
+      resolveOnce({
+        code: null,
+        stdout,
+        stderr: truncateTail(`${stderr}\n${error.message}`),
+        timedOut,
+        usageMetrics,
+      });
     });
     child.on("close", (code) => {
       const elapsedMs = Date.now() - startedAt;
-      console.log(`${tag} finalizo code=${code} transcurrido=${elapsedMs}ms${timedOut ? " (timeout)" : ""}`);
+      console.log(
+        `${tag} finalizo code=${code} transcurrido=${elapsedMs}ms${timedOut ? " (timeout)" : ""}`
+      );
       resolveOnce({ code, stdout, stderr, timedOut, usageMetrics });
     });
   });
 }
 
+/** Adapter async sobre el pool pg (o un store de tests con los mismos metodos). */
+function createPgStore(db) {
+  if (db && typeof db.getReporte === "function") {
+    return db;
+  }
+
+  return {
+    async getReporte(id) {
+      return db.queryOne(
+        `SELECT id, equipo, fecha_hora, reporte_sistema, reporte_red, reporte_logs, pdf_status
+         FROM reportes WHERE id = $1`,
+        [id]
+      );
+    },
+    async markGenerating(id) {
+      await db.query(
+        `UPDATE reportes
+         SET pdf_status = 'generando',
+             pdf_error = NULL,
+             pdf_tokens_input = NULL,
+             pdf_tokens_output = NULL,
+             pdf_tokens_reasoning = NULL,
+             pdf_tokens_total = NULL,
+             pdf_tokens_cache_read = NULL,
+             pdf_tokens_cache_write = NULL,
+             pdf_cost_total = NULL
+         WHERE id = $1`,
+        [id]
+      );
+    },
+    async markReady(fileName, metrics, id) {
+      await db.query(
+        `UPDATE reportes
+         SET pdf_path = $1,
+             pdf_status = 'listo',
+             pdf_error = NULL,
+             pdf_tokens_input = $2,
+             pdf_tokens_output = $3,
+             pdf_tokens_reasoning = $4,
+             pdf_tokens_total = $5,
+             pdf_tokens_cache_read = $6,
+             pdf_tokens_cache_write = $7,
+             pdf_cost_total = $8
+         WHERE id = $9`,
+        [
+          fileName,
+          metrics.pdf_tokens_input,
+          metrics.pdf_tokens_output,
+          metrics.pdf_tokens_reasoning,
+          metrics.pdf_tokens_total,
+          metrics.pdf_tokens_cache_read,
+          metrics.pdf_tokens_cache_write,
+          metrics.pdf_cost_total,
+          id,
+        ]
+      );
+    },
+    async markError(message, metrics, id) {
+      await db.query(
+        `UPDATE reportes
+         SET pdf_path = NULL,
+             pdf_status = 'error',
+             pdf_error = $1,
+             pdf_tokens_input = $2,
+             pdf_tokens_output = $3,
+             pdf_tokens_reasoning = $4,
+             pdf_tokens_total = $5,
+             pdf_tokens_cache_read = $6,
+             pdf_tokens_cache_write = $7,
+             pdf_cost_total = $8
+         WHERE id = $9`,
+        [
+          message,
+          metrics.pdf_tokens_input,
+          metrics.pdf_tokens_output,
+          metrics.pdf_tokens_reasoning,
+          metrics.pdf_tokens_total,
+          metrics.pdf_tokens_cache_read,
+          metrics.pdf_tokens_cache_write,
+          metrics.pdf_cost_total,
+          id,
+        ]
+      );
+    },
+    async getPromptContenido() {
+      const row = await db.queryOne(
+        "SELECT contenido FROM prompts WHERE clave = $1",
+        ["reporte_ejecutivo"]
+      );
+      return row ? row.contenido : null;
+    },
+  };
+}
+
 function createPdfGenerator(options = {}) {
-  const db = options.db || defaultDb;
+  const store = createPgStore(options.db || defaultDb);
   const dataDir = options.dataDir || path.join(__dirname, "..", "..", "data");
-  const promptPath = options.promptPath || path.join(__dirname, "..", "..", "prompts", "reporte_ejecutivo.txt");
-  const rendererScriptPath = options.rendererScriptPath || path.join(__dirname, "..", "..", "scripts", "render_reporte_ejecutivo.py");
+  const promptPath =
+    options.promptPath ||
+    path.join(__dirname, "..", "..", "prompts", "reporte_ejecutivo.txt");
+  const rendererScriptPath =
+    options.rendererScriptPath ||
+    path.join(__dirname, "..", "..", "scripts", "render_reporte_ejecutivo.py");
   const plantillaScriptPath =
     options.plantillaScriptPath ||
     path.join(__dirname, "..", "..", "ejemplos", "plantilla_reporte_corporativo.py");
-  const opencodeConfigPath = options.opencodeConfigPath || path.join(__dirname, "..", "..", "opencode.json");
+  const opencodeConfigPath =
+    options.opencodeConfigPath || path.join(__dirname, "..", "..", "opencode.json");
   const env = buildOpencodeEnv(options.env || process.env);
   const timeoutMs = options.timeoutMs || Number(env.OPENCODE_TIMEOUT_MS) || 10 * 60 * 1000;
   const killGraceMs = options.killGraceMs || DEFAULT_KILL_GRACE_MS;
+  const preferPromptFile = Boolean(options.preferPromptFile);
   const queuedIds = new Set();
   const queue = [];
   let running = false;
   let drainPromise = Promise.resolve();
 
-  const getReporte = db.prepare(
-    "SELECT id, equipo, fecha_hora, reporte_sistema, reporte_red, reporte_logs, pdf_status FROM reportes WHERE id = ?"
-  );
-  const markGenerating = db.prepare(
-    `UPDATE reportes
-     SET pdf_status = 'generando',
-         pdf_error = NULL,
-         pdf_tokens_input = NULL,
-         pdf_tokens_output = NULL,
-         pdf_tokens_reasoning = NULL,
-         pdf_tokens_total = NULL,
-         pdf_tokens_cache_read = NULL,
-         pdf_tokens_cache_write = NULL,
-         pdf_cost_total = NULL
-     WHERE id = ?`
-  );
-  const markReady = db.prepare(
-    `UPDATE reportes
-     SET pdf_path = ?,
-         pdf_status = 'listo',
-         pdf_error = NULL,
-         pdf_tokens_input = ?,
-         pdf_tokens_output = ?,
-         pdf_tokens_reasoning = ?,
-         pdf_tokens_total = ?,
-         pdf_tokens_cache_read = ?,
-         pdf_tokens_cache_write = ?,
-         pdf_cost_total = ?
-     WHERE id = ?`
-  );
-  const markError = db.prepare(
-    `UPDATE reportes
-     SET pdf_path = NULL,
-         pdf_status = 'error',
-         pdf_error = ?,
-         pdf_tokens_input = ?,
-         pdf_tokens_output = ?,
-         pdf_tokens_reasoning = ?,
-         pdf_tokens_total = ?,
-         pdf_tokens_cache_read = ?,
-         pdf_tokens_cache_write = ?,
-         pdf_cost_total = ?
-     WHERE id = ?`
-  );
+  async function loadPrompt() {
+    if (!preferPromptFile) {
+      const fromDb = await store.getPromptContenido();
+      if (fromDb != null) {
+        return fromDb;
+      }
+    }
+    if (fs.existsSync(promptPath)) {
+      return fs.readFileSync(promptPath, "utf8");
+    }
+    return null;
+  }
 
   async function processReport(id) {
     const tmpRoot = path.join(dataDir, "tmp");
@@ -292,16 +372,15 @@ function createPdfGenerator(options = {}) {
     let usageMetrics = createEmptyUsageMetrics();
 
     try {
-      const row = getReporte.get(id);
+      const row = await store.getReporte(id);
       if (!row) {
         throw new Error(`Reporte ${id} no existe`);
       }
 
-      if (!fs.existsSync(promptPath)) {
+      const prompt = await loadPrompt();
+      if (!prompt) {
         throw new Error("El prompt para generar el PDF no existe o no esta configurado");
       }
-
-      const prompt = fs.readFileSync(promptPath, "utf8");
       if (!isPromptReady(prompt)) {
         throw new Error("El prompt para generar el PDF no esta configurado");
       }
@@ -361,37 +440,19 @@ function createPdfGenerator(options = {}) {
         timeoutMs,
       });
       if (renderResult.code !== 0 || !fs.existsSync(draftPdfPath)) {
-        const details = truncateTail([renderResult.stderr, renderResult.stdout].filter(Boolean).join("\n"));
+        const details = truncateTail(
+          [renderResult.stderr, renderResult.stdout].filter(Boolean).join("\n")
+        );
         throw new Error(details || "renderer no genero el PDF");
       }
 
       const fileName = `${id}.pdf`;
       fs.renameSync(draftPdfPath, path.join(pdfDir, fileName));
       const dbMetrics = usageMetricsToDbRow(usageMetrics);
-      markReady.run(
-        fileName,
-        dbMetrics.pdf_tokens_input,
-        dbMetrics.pdf_tokens_output,
-        dbMetrics.pdf_tokens_reasoning,
-        dbMetrics.pdf_tokens_total,
-        dbMetrics.pdf_tokens_cache_read,
-        dbMetrics.pdf_tokens_cache_write,
-        dbMetrics.pdf_cost_total,
-        id
-      );
+      await store.markReady(fileName, dbMetrics, id);
     } catch (error) {
       const dbMetrics = usageMetricsToDbRow(usageMetrics);
-      markError.run(
-        truncateTail(error.message),
-        dbMetrics.pdf_tokens_input,
-        dbMetrics.pdf_tokens_output,
-        dbMetrics.pdf_tokens_reasoning,
-        dbMetrics.pdf_tokens_total,
-        dbMetrics.pdf_tokens_cache_read,
-        dbMetrics.pdf_tokens_cache_write,
-        dbMetrics.pdf_cost_total,
-        id
-      );
+      await store.markError(truncateTail(error.message), dbMetrics, id);
     } finally {
       if (workDir) {
         fs.rmSync(workDir, { recursive: true, force: true });
@@ -415,12 +476,12 @@ function createPdfGenerator(options = {}) {
     running = false;
   }
 
-  function encolarGeneracion(id) {
-    const row = getReporte.get(id);
+  async function encolarGeneracion(id) {
+    const row = await store.getReporte(id);
     if (!row || row.pdf_status === "generando" || queuedIds.has(id)) {
       return false;
     }
-    markGenerating.run(id);
+    await store.markGenerating(id);
     queuedIds.add(id);
     queue.push(id);
     drainPromise = drainPromise.then(processQueue);
@@ -434,15 +495,24 @@ function createPdfGenerator(options = {}) {
   return { encolarGeneracion, drain };
 }
 
-const defaultGenerator = createPdfGenerator();
+let defaultGenerator = null;
+
+function getDefaultGenerator() {
+  if (!defaultGenerator) {
+    defaultGenerator = createPdfGenerator();
+  }
+  return defaultGenerator;
+}
 
 module.exports = {
   accumulateUsageFromEvent,
   createEmptyUsageMetrics,
   createPdfGenerator,
+  createPgStore,
   buildOpencodeEnv,
-  encolarGeneracion: defaultGenerator.encolarGeneracion,
+  encolarGeneracion: (...args) => getDefaultGenerator().encolarGeneracion(...args),
   isPromptReady,
   truncateTail,
   usageMetricsToDbRow,
+  findPdf,
 };

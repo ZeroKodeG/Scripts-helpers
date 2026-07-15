@@ -3,12 +3,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const Database = require("better-sqlite3");
 
-const moduleDbRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pdf-generator-module-db-"));
-process.env.DB_PATH = path.join(moduleDbRoot, "auditoria.db");
+process.env.NODE_ENV = "test";
 
-const { ensureReportesSchema } = require("../src/db");
+const { createMemoryStore } = require("./helpers/memoryStore");
 const {
   createPdfGenerator,
   isPromptReady,
@@ -19,13 +17,8 @@ function makeDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "pdf-generator-test-"));
 }
 
-function makeDb() {
-  const db = new Database(":memory:");
-  ensureReportesSchema(db);
-  db.prepare(
-    "INSERT INTO reportes (equipo, reporte_sistema, reporte_red, reporte_logs) VALUES (?, ?, ?, ?)"
-  ).run("SERVER1", "sistema", "red", "logs");
-  return db;
+function makeDb(overrides) {
+  return createMemoryStore(overrides);
 }
 
 function makeFakeOpencode(binDir, code) {
@@ -105,6 +98,7 @@ process.exit(0);
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -114,12 +108,14 @@ process.exit(0);
     timeoutMs: 5000,
   });
 
-  const queued = generator.encolarGeneracion(1);
+  const queued = await generator.encolarGeneracion(1);
   assert.equal(queued, true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error, pdf_path FROM reportes WHERE id = 1").get();
-  assert.deepEqual(row, { pdf_status: "listo", pdf_error: null, pdf_path: "1.pdf" });
+  const row = db.getRow(1);
+  assert.equal(row.pdf_status, "listo");
+  assert.equal(row.pdf_error, null);
+  assert.equal(row.pdf_path, "1.pdf");
   assert.equal(fs.existsSync(path.join(dataDir, "pdfs", "1.pdf")), true);
   assert.equal(fs.readdirSync(path.join(dataDir, "tmp")).length, 0);
 });
@@ -136,6 +132,7 @@ test("generator marks error when plantilla de estilo is missing", async () => {
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -144,10 +141,10 @@ test("generator marks error when plantilla de estilo is missing", async () => {
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /plantilla de estilo corporativo/i);
 });
@@ -164,6 +161,7 @@ test("generator marks error when opencode does not produce reporte_normalizado.j
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -171,10 +169,10 @@ test("generator marks error when opencode does not produce reporte_normalizado.j
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /reporte_normalizado\.json/i);
 });
@@ -235,6 +233,7 @@ process.exit(0);
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -243,11 +242,13 @@ process.exit(0);
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error, pdf_path FROM reportes WHERE id = 1").get();
-  assert.deepEqual(row, { pdf_status: "listo", pdf_error: null, pdf_path: "1.pdf" });
+  const row = db.getRow(1);
+  assert.equal(row.pdf_status, "listo");
+  assert.equal(row.pdf_error, null);
+  assert.equal(row.pdf_path, "1.pdf");
   assert.equal(fs.existsSync(path.join(dataDir, "pdfs", "1.pdf")), true);
 });
 
@@ -336,6 +337,7 @@ process.exit(0);
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -344,23 +346,30 @@ process.exit(0);
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db
-    .prepare(
-      "SELECT pdf_tokens_input, pdf_tokens_output, pdf_tokens_reasoning, pdf_tokens_total, pdf_tokens_cache_read, pdf_tokens_cache_write, pdf_cost_total FROM reportes WHERE id = 1"
-    )
-    .get();
-  assert.deepEqual(row, {
-    pdf_tokens_input: 300,
-    pdf_tokens_output: 75,
-    pdf_tokens_reasoning: 15,
-    pdf_tokens_total: 1500,
-    pdf_tokens_cache_read: 1000,
-    pdf_tokens_cache_write: 3,
-    pdf_cost_total: 0.0168,
-  });
+  const row = db.getRow(1);
+  assert.deepEqual(
+    {
+      pdf_tokens_input: row.pdf_tokens_input,
+      pdf_tokens_output: row.pdf_tokens_output,
+      pdf_tokens_reasoning: row.pdf_tokens_reasoning,
+      pdf_tokens_total: row.pdf_tokens_total,
+      pdf_tokens_cache_read: row.pdf_tokens_cache_read,
+      pdf_tokens_cache_write: row.pdf_tokens_cache_write,
+      pdf_cost_total: row.pdf_cost_total,
+    },
+    {
+      pdf_tokens_input: 300,
+      pdf_tokens_output: 75,
+      pdf_tokens_reasoning: 15,
+      pdf_tokens_total: 1500,
+      pdf_tokens_cache_read: 1000,
+      pdf_tokens_cache_write: 3,
+      pdf_cost_total: 0.0168,
+    }
+  );
 });
 
 test("generator marks error when normalized json is invalid", async () => {
@@ -386,6 +395,7 @@ process.exit(0);
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -393,10 +403,10 @@ process.exit(0);
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /metadata\.reportId|seccion final obligatoria/i);
 });
@@ -447,6 +457,7 @@ process.exit(0);
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -455,10 +466,10 @@ process.exit(0);
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /missing-renderer|no such file|can't open file/i);
 });
@@ -519,6 +530,7 @@ setTimeout(() => {
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -527,8 +539,8 @@ setTimeout(() => {
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
-  assert.equal(generator.encolarGeneracion(1), false);
+  assert.equal(await generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), false);
   await generator.drain();
 });
 
@@ -541,6 +553,7 @@ test("generator marks error when prompt is still placeholder", async () => {
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -548,10 +561,10 @@ test("generator marks error when prompt is still placeholder", async () => {
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error, pdf_path FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /prompt/i);
   assert.equal(row.pdf_path, null);
@@ -569,6 +582,7 @@ test("generator marks error when opencode fails without pdf", async () => {
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -576,10 +590,10 @@ test("generator marks error when opencode fails without pdf", async () => {
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error, pdf_path FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /modelo invalido/);
   assert.equal(row.pdf_path, null);
@@ -596,8 +610,9 @@ test("generator clears stale pdf_path when generation fails", async () => {
   makeFakeOpencode(binDir, "#!/bin/sh\necho 'fallo generacion' >&2\nexit 1\n");
 
   const db = makeDb();
-  db.prepare("UPDATE reportes SET pdf_path = ? WHERE id = 1").run("old.pdf");
+  db.setPdfPath(1, "old.pdf");
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -605,10 +620,10 @@ test("generator clears stale pdf_path when generation fails", async () => {
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
-  const row = db.prepare("SELECT pdf_status, pdf_error, pdf_path FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /fallo generacion/);
   assert.equal(row.pdf_path, null);
@@ -629,6 +644,7 @@ test("generator times out and cleans up when opencode ignores SIGTERM", async ()
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -638,11 +654,11 @@ test("generator times out and cleans up when opencode ignores SIGTERM", async ()
   });
 
   const startedAt = Date.now();
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
   const elapsedMs = Date.now() - startedAt;
-  const row = db.prepare("SELECT pdf_status, pdf_error, pdf_path FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /tiempo limite/i);
   assert.equal(row.pdf_path, null);
@@ -708,6 +724,7 @@ process.exit(0);
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -723,7 +740,7 @@ process.exit(0);
     timeoutMs: 5000,
   });
 
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
   const envText = fs.readFileSync(path.join(dataDir, "pdfs", "1.pdf"), "utf8");
@@ -747,6 +764,7 @@ test("generator honors OPENCODE_TIMEOUT_MS from env when timeoutMs option is omi
 
   const db = makeDb();
   const generator = createPdfGenerator({
+    preferPromptFile: true,
     db,
     dataDir,
     promptPath,
@@ -760,11 +778,11 @@ test("generator honors OPENCODE_TIMEOUT_MS from env when timeoutMs option is omi
   });
 
   const startedAt = Date.now();
-  assert.equal(generator.encolarGeneracion(1), true);
+  assert.equal(await generator.encolarGeneracion(1), true);
   await generator.drain();
 
   const elapsedMs = Date.now() - startedAt;
-  const row = db.prepare("SELECT pdf_status, pdf_error, pdf_path FROM reportes WHERE id = 1").get();
+  const row = db.getRow(1);
   assert.equal(row.pdf_status, "error");
   assert.match(row.pdf_error, /tiempo limite/i);
   assert.equal(row.pdf_path, null);

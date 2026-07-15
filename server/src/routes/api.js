@@ -1,65 +1,28 @@
 const express = require("express");
-const multer = require("multer");
 const db = require("../db");
-const { requireApiKey } = require("../auth");
-
-const upload = multer({
-  limits: {
-    fieldSize: 20 * 1024 * 1024,
-    fields: 10,
-  },
-}); // solo se usa para leer campos de texto multipart, sin archivos
-const parseUrlEncoded = express.urlencoded({ extended: false, limit: "20mb", parameterLimit: 10 });
+const { requireJwt } = require("../auth");
+const authRoutes = require("./auth");
+const reportesRoutes = require("./reportes");
+const usuariosRoutes = require("./usuarios");
+const promptsRoutes = require("./prompts");
 
 const router = express.Router();
 
-router.use(requireApiKey);
+router.use("/auth", authRoutes);
+router.use("/reportes", reportesRoutes);
+router.use("/usuarios", usuariosRoutes);
+router.use("/prompts", promptsRoutes);
 
-// POST /api/reportes - sube los 3 reportes de una corrida de un equipo
-router.post("/reportes", parseUrlEncoded, upload.none(), (req, res) => {
-  const { equipo, reporte_sistema, reporte_red, reporte_logs } = req.body;
-
-  if (!equipo) {
-    return res.status(400).json({ error: "Falta el campo equipo" });
+router.get("/equipos", requireJwt, async (req, res) => {
+  try {
+    const rows = await db.queryAll(
+      "SELECT DISTINCT equipo FROM reportes ORDER BY equipo"
+    );
+    return res.json(rows.map((r) => r.equipo));
+  } catch (error) {
+    console.error("GET /equipos:", error);
+    return res.status(500).json({ error: "Error interno" });
   }
-
-  const stmt = db.prepare(`
-    INSERT INTO reportes (equipo, reporte_sistema, reporte_red, reporte_logs)
-    VALUES (?, ?, ?, ?)
-  `);
-  const info = stmt.run(
-    equipo,
-    reporte_sistema || null,
-    reporte_red || null,
-    reporte_logs || null
-  );
-
-  res.status(201).json({ id: info.lastInsertRowid });
-});
-
-// GET /api/equipos - lista de equipos distintos
-router.get("/equipos", (req, res) => {
-  const rows = db
-    .prepare("SELECT DISTINCT equipo FROM reportes ORDER BY equipo")
-    .all();
-  res.json(rows.map((r) => r.equipo));
-});
-
-// GET /api/reportes?equipo=NOMBRE - lista de corridas, mas recientes primero
-router.get("/reportes", (req, res) => {
-  const { equipo } = req.query;
-  const rows = equipo
-    ? db
-        .prepare(
-          "SELECT id, equipo, fecha_hora, pdf_path FROM reportes WHERE equipo = ? ORDER BY fecha_hora DESC"
-        )
-        .all(equipo)
-    : db
-        .prepare(
-          "SELECT id, equipo, fecha_hora, pdf_path FROM reportes ORDER BY fecha_hora DESC"
-        )
-        .all();
-  res.json(rows);
 });
 
 module.exports = router;
