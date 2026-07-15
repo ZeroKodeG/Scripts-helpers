@@ -23,14 +23,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - ./server/.env
     environment:
       # Forzar Postgres interno aunque .env tenga DATABASE_URL de desarrollo local
       DATABASE_URL: postgresql://${POSTGRES_USER:-auditoria}:${POSTGRES_PASSWORD:-auditoria}@postgres:5432/${POSTGRES_DB:-auditoria}
       PORT: ${PORT:-3000}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
-      
+      API_KEY: ${API_KEY}
+      DB_PATH: ${DB_PATH}
+      SESSION_SECRET: ${SESSION_SECRET}
+      OPENCODE_MODEL: ${OPENCODE_MODEL}
+      OPENCODE_TIMEOUT_MS: ${OPENCODE_TIMEOUT_MS}
+      ZAI_API_KEY: ${ZAI_API_KEY}
     volumes:
       - auditoria_data:/app/data
 
