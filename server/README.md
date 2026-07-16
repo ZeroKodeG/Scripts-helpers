@@ -64,15 +64,25 @@ Upload desde `.bat`: header `X-API-Key` de un **admin** activo → `POST /api/re
 
 ### Migrar SQLite antiguo → Postgres
 
+No hace falta `better-sqlite3` (falla en la imagen Docker sin compilador C). El script usa Python 3 (`sqlite3` de la stdlib) + el cliente `pg` ya instalado.
+
+Dentro del contenedor backend (con el `.db` montado en `/app/data`):
+
+```bash
+# DATABASE_URL ya apunta al servicio postgres del compose
+SQLITE_PATH=/app/data/auditoria.db npm run migrate:sqlite
+```
+
+En local:
+
 ```bash
 cd server
-npm i better-sqlite3 --no-save --registry https://registry.npmjs.org/
 DATABASE_URL=postgresql://auditoria:auditoria@localhost:5432/auditoria \
   SQLITE_PATH=./data/auditoria.db \
   npm run migrate:sqlite
 ```
 
-Los PDF en `data/pdfs/` se reutilizan tal cual.
+Los PDF en `data/pdfs/` se reutilizan tal cual. Filas con el mismo `id` se omiten (`ON CONFLICT DO NOTHING`).
 
 ## Desarrollo local
 

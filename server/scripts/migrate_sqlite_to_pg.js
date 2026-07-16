@@ -3,16 +3,57 @@
  * Migracion one-shot: SQLite (data/auditoria.db) -> Postgres (DATABASE_URL).
  * No migra usuarios/prompts (se reseed-ean). Los PDFs en data/pdfs/ se reutilizan.
  *
- * Uso:
- *   DATABASE_URL=postgresql://... SQLITE_PATH=./data/auditoria.db node scripts/migrate_sqlite_to_pg.js
+ * Lee SQLite con Python (stdlib sqlite3) — no requiere better-sqlite3 ni compilador.
  *
- * Requiere el paquete better-sqlite3 instalado temporalmente, o pasar SQLITE_PATH
- * y tener `sqlite3` CLI. Preferido: npm i better-sqlite3 --no-save && node ...
+ * Uso (dentro del contenedor backend o en local con Python 3):
+ *   DATABASE_URL=postgresql://... SQLITE_PATH=./data/auditoria.db npm run migrate:sqlite
  */
 require("dotenv").config();
 const path = require("path");
 const fs = require("fs");
+const { spawnSync } = require("child_process");
 const { Pool } = require("pg");
+
+const DUMP_PY = `
+import json, sqlite3, sys
+
+db_path = sys.argv[1]
+conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+conn.row_factory = sqlite3.Row
+cur = conn.execute(
+    """
+    SELECT id, equipo, fecha_hora, reporte_sistema, reporte_red, reporte_logs,
+           pdf_path, pdf_status, pdf_error,
+           pdf_tokens_input, pdf_tokens_output, pdf_tokens_reasoning,
+           pdf_tokens_total, pdf_tokens_cache_read, pdf_tokens_cache_write,
+           pdf_cost_total
+    FROM reportes
+    ORDER BY id
+    """
+)
+rows = []
+for row in cur:
+    item = {k: row[k] for k in row.keys()}
+    rows.append(item)
+conn.close()
+json.dump(rows, sys.stdout, ensure_ascii=False)
+`;
+
+function readSqliteRows(sqlitePath) {
+  const result = spawnSync("python3", ["-c", DUMP_PY, sqlitePath], {
+    encoding: "utf8",
+    maxBuffer: 512 * 1024 * 1024,
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `python3 no pudo leer SQLite (exit ${result.status}):\n${result.stderr || result.stdout}`
+    );
+  }
+  return JSON.parse(result.stdout || "[]");
+}
 
 async function main() {
   const sqlitePath =
@@ -26,32 +67,10 @@ async function main() {
     process.exit(1);
   }
 
-  let Database;
-  try {
-    Database = require("better-sqlite3");
-  } catch {
-    console.error(
-      "Instala better-sqlite3 temporalmente: npm i better-sqlite3 --no-save"
-    );
-    process.exit(1);
-  }
+  const rows = readSqliteRows(sqlitePath);
+  console.log(`Migrando ${rows.length} reportes desde ${sqlitePath}...`);
 
-  const sqlite = new Database(sqlitePath, { readonly: true });
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-  const rows = sqlite
-    .prepare(
-      `SELECT id, equipo, fecha_hora, reporte_sistema, reporte_red, reporte_logs,
-              pdf_path, pdf_status, pdf_error,
-              pdf_tokens_input, pdf_tokens_output, pdf_tokens_reasoning,
-              pdf_tokens_total, pdf_tokens_cache_read, pdf_tokens_cache_write,
-              pdf_cost_total
-       FROM reportes ORDER BY id`
-    )
-    .all();
-
-  console.log(`Migrando ${rows.length} reportes...`);
-
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -99,7 +118,6 @@ async function main() {
   } finally {
     client.release();
     await pool.end();
-    sqlite.close();
   }
 }
 
