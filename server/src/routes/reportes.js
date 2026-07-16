@@ -46,6 +46,12 @@ function sanitizeSegment(value) {
   return String(value).replace(/[^A-Za-z0-9._-]/g, "_");
 }
 
+/** Postgres TEXT/UTF8 no admite NUL (0x00); los reportes de Windows a veces los traen. */
+function scrubNulls(value) {
+  if (value == null) return null;
+  return String(value).replace(/\u0000/g, "");
+}
+
 function formatPdfCost(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric.toFixed(4) : null;
@@ -100,10 +106,10 @@ router.post(
          VALUES ($1, $2, $3, $4)
          RETURNING id`,
         [
-          equipo,
-          reporte_sistema || null,
-          reporte_red || null,
-          reporte_logs || null,
+          scrubNulls(equipo),
+          scrubNulls(reporte_sistema) || null,
+          scrubNulls(reporte_red) || null,
+          scrubNulls(reporte_logs) || null,
         ]
       );
 
