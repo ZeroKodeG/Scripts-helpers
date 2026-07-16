@@ -55,6 +55,13 @@ function readSqliteRows(sqlitePath) {
   return JSON.parse(result.stdout || "[]");
 }
 
+/** Postgres TEXT/UTF8 no admite NUL (0x00); SQLite si puede tenerlos en reportes. */
+function scrubPgText(value) {
+  if (value == null) return null;
+  if (typeof value !== "string") return value;
+  return value.replace(/\u0000/g, "");
+}
+
 async function main() {
   const sqlitePath =
     process.env.SQLITE_PATH || path.join(__dirname, "..", "data", "auditoria.db");
@@ -89,14 +96,14 @@ async function main() {
          ON CONFLICT (id) DO NOTHING`,
         [
           r.id,
-          r.equipo,
+          scrubPgText(r.equipo),
           r.fecha_hora,
-          r.reporte_sistema,
-          r.reporte_red,
-          r.reporte_logs,
-          r.pdf_path,
-          r.pdf_status,
-          r.pdf_error,
+          scrubPgText(r.reporte_sistema),
+          scrubPgText(r.reporte_red),
+          scrubPgText(r.reporte_logs),
+          scrubPgText(r.pdf_path),
+          scrubPgText(r.pdf_status),
+          scrubPgText(r.pdf_error),
           r.pdf_tokens_input,
           r.pdf_tokens_output,
           r.pdf_tokens_reasoning,
