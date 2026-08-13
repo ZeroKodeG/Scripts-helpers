@@ -155,8 +155,8 @@ Para las secciones 1-9:
 Para `resumen_ejecutivo`:
 - Incluye siempre que haya evidencia una tabla de indicadores con columnas
   `Indicador`, `Valor` y `Estado`.
-- Los indicadores deben ser de auditoria (firewall, RDP, cuentas privilegiadas,
-  logons fallidos 4625, puertos en escucha, etc.), no KPIs genericos de operaciones.
+- Los indicadores deben ser de auditoria (licencia del SO, firewall, RDP, cuentas privilegiadas,
+  perfiles de usuario, logons fallidos 4625, puertos en escucha, etc.), no KPIs genericos de operaciones.
 
 Para la seccion `hallazgos_y_recomendaciones`:
 - Siempre debe existir.
@@ -180,8 +180,8 @@ MAPEO RECOMENDADO DESDE LOS TXT
 
 Mapea el contenido de los scripts a las secciones canonicas de esta forma:
 
-- Informacion general, hardware, sistema operativo, parches, uptime -> `informacion_sistema`
-- Cuentas locales, Administrators, Domain Admins -> `cuentas_privilegios`
+- Informacion general, hardware, sistema operativo, estado de licencia del SO (slmgr /dli /xpr, LicenseStatus), parches, uptime -> `informacion_sistema`
+- Cuentas locales, usuarios y perfiles (ProfileList, carpetas en Users, sesiones activas), Administrators, Domain Admins -> `cuentas_privilegios`
 - Contrasenas, firewall, RDP, SMB, UAC, GPO de seguridad -> `politicas_seguridad`
 - IP, DNS, gateway, rutas, ARP, resolucion -> `configuracion_red`
 - Puertos en escucha, conexiones establecidas, destinos remotos -> `superficie_exposicion`

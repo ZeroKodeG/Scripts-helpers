@@ -52,7 +52,7 @@ set "FECHA=%DATE% %TIME%"
 del "%LOG%" >nul 2>&1
 call :log "=== INICIO AUDITORIA SISTEMA ==="
 if defined DEBUG (
-    for /f %%C in ('find /c /v "" ^< "%~f0"') do echo [DEBUG] Lineas en este archivo: %%C ^(esperado: 168-175^)
+    for /f %%C in ('find /c /v "" ^< "%~f0"') do echo [DEBUG] Lineas en este archivo: %%C ^(esperado: 188-198^)
     echo [DEBUG] Archivo: %~f0
     echo.
 )
@@ -66,7 +66,13 @@ echo.
 >>"%REPORTE%" echo Fecha: %FECHA%
 >>"%REPORTE%" echo Equipo: %COMPUTERNAME%
 >>"%REPORTE%" echo Usuario: %USERNAME%
->>"%REPORTE%" echo Version script: 2026-06-17e
+>>"%REPORTE%" echo Version script: 2026-08-13a
+>>"%REPORTE%" echo.
+>>"%REPORTE%" echo --- Licencia del sistema operativo ---
+>>"%REPORTE%" echo LicenseStatus WMI: 0=Sin licencia  1=Licenciada  2=Gracia OOB  3=Gracia OOT  4=No genuina  5=Notificacion  6=Gracia extendida
+cscript //nologo "%SystemRoot%\System32\slmgr.vbs" /dli >>"%REPORTE%" 2>&1
+cscript //nologo "%SystemRoot%\System32\slmgr.vbs" /xpr >>"%REPORTE%" 2>&1
+wmic path SoftwareLicensingProduct where (PartialProductKey is not null) get Name,Description,LicenseStatus,PartialProductKey /format:list >>"%REPORTE%" 2>&1
 >>"%REPORTE%" echo.
 call :seccion "[+] INFORMACION DEL SISTEMA"
 systeminfo >>"%REPORTE%" 2>&1
@@ -75,6 +81,21 @@ net user >>"%REPORTE%" 2>&1
 >>"%REPORTE%" echo.
 >>"%REPORTE%" echo Miembros del grupo Administrators:
 net localgroup Administrators >>"%REPORTE%" 2>&1
+call :seccion "[+] USUARIOS Y PERFILES"
+>>"%REPORTE%" echo --- Cuentas locales (detalle) ---
+wmic useraccount where "LocalAccount=True" get Name,Domain,Disabled,Lockout,Status,SID,PasswordRequired,PasswordExpires >>"%REPORTE%" 2>&1
+>>"%REPORTE%" echo.
+>>"%REPORTE%" echo --- Sesiones de usuario activas ---
+query user >>"%REPORTE%" 2>&1
+>>"%REPORTE%" echo.
+>>"%REPORTE%" echo --- Perfiles de usuario ---
+wmic userprofile get LocalPath,SID,LastUseTime,Loaded,Special,Status >>"%REPORTE%" 2>&1
+>>"%REPORTE%" echo.
+>>"%REPORTE%" echo --- Carpetas de perfil en %SystemDrive%\Users ---
+dir /a:d "%SystemDrive%\Users" >>"%REPORTE%" 2>&1
+>>"%REPORTE%" echo.
+>>"%REPORTE%" echo --- ProfileList (ruta de cada perfil) ---
+reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" /s /v ProfileImagePath >>"%REPORTE%" 2>&1
 call :seccion "[+] CONTRASENAS LOCALES"
 net accounts >>"%REPORTE%" 2>&1
 call :seccion "[+] CONTEXTO DE SESION ACTUAL"
