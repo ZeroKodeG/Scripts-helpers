@@ -73,19 +73,19 @@ set "DL_URL=%~1"
 set "DL_DEST=%~2"
 if exist "%DL_DEST%" del "%DL_DEST%" >nul 2>&1
 
-where /q curl.exe
+where curl.exe >nul 2>&1
 if !errorlevel! equ 0 (
     curl -s -f --ssl-no-revoke -o "%DL_DEST%" "%DL_URL%"
     if !errorlevel! equ 0 if exist "%DL_DEST%" exit /b 0
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
-    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
-    "$wc = New-Object Net.WebClient;" ^
-    "$wc.DownloadFile('%DL_URL%', '%DL_DEST%')" >nul 2>&1
+powershell.exe -NoProfile -Command "[Net.ServicePointManager]::CheckCertificateRevocationList=$false; [Net.ServicePointManager]::SecurityProtocol=[Enum]::ToObject([Net.SecurityProtocolType],3072); (New-Object Net.WebClient).DownloadFile('%DL_URL%','%DL_DEST%')" >nul 2>&1
 if exist "%DL_DEST%" exit /b 0
 
 certutil -urlcache -split -f "%DL_URL%" "%DL_DEST%" >nul 2>&1
+if exist "%DL_DEST%" exit /b 0
+
+bitsadmin /transfer auditget%RANDOM% /download /priority high "%DL_URL%" "%DL_DEST%" >nul 2>&1
 if exist "%DL_DEST%" exit /b 0
 
 exit /b 1
@@ -107,7 +107,7 @@ if exist "%REP_SISTEMA%" set "FORM_SISTEMA=--data-urlencode reporte_sistema@%REP
 if exist "%REP_RED%" set "FORM_RED=--data-urlencode reporte_red@%REP_RED%"
 if exist "%REP_LOGS%" set "FORM_LOGS=--data-urlencode reporte_logs@%REP_LOGS%"
 
-where /q curl.exe
+where curl.exe >nul 2>&1
 if !errorlevel! neq 0 goto :subir_powershell
 for /f "delims=" %%C in ('curl.exe -sS --ssl-no-revoke -o "%UPLOAD_RESP%" -w "%%{http_code}" -X POST "%POST_URL%" -H "X-API-Key: %API_KEY%" --data-urlencode "equipo=%COMPUTERNAME%" !FORM_SISTEMA! !FORM_RED! !FORM_LOGS! 2^>nul') do set "UPLOAD_CODE=%%C"
 if not "!UPLOAD_CODE!"=="000" if not "!UPLOAD_CODE!"=="" goto :subir_mostrar
@@ -116,7 +116,7 @@ echo     curl no pudo completar TLS; reintentando con PowerShell...
 :subir_powershell
 set "AUDIT_POST_URL=%POST_URL%"
 set "AUDIT_POST_RESP=%UPLOAD_RESP%"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; [Net.ServicePointManager]::CheckCertificateRevocationList = $false; $c = New-Object Net.WebClient; $c.Headers.Add('X-API-Key', $env:API_KEY); $f = New-Object System.Collections.Specialized.NameValueCollection; $f['equipo'] = $env:COMPUTERNAME; if (Test-Path $env:REP_SISTEMA) { $f['reporte_sistema'] = [IO.File]::ReadAllText($env:REP_SISTEMA) }; if (Test-Path $env:REP_RED) { $f['reporte_red'] = [IO.File]::ReadAllText($env:REP_RED) }; if (Test-Path $env:REP_LOGS) { $f['reporte_logs'] = [IO.File]::ReadAllText($env:REP_LOGS) }; $b = $c.UploadValues($env:AUDIT_POST_URL, 'POST', $f); [IO.File]::WriteAllText($env:AUDIT_POST_RESP, [Text.Encoding]::UTF8.GetString($b)) } catch { [IO.File]::WriteAllText($env:AUDIT_POST_RESP, $_.Exception.Message); throw }"
+powershell.exe -NoProfile -Command "trap { [IO.File]::WriteAllText($env:AUDIT_POST_RESP, $_.Exception.Message); exit 1 }; [Net.ServicePointManager]::CheckCertificateRevocationList=$false; [Net.ServicePointManager]::SecurityProtocol=[Enum]::ToObject([Net.SecurityProtocolType],3072); $c=New-Object Net.WebClient; $c.Headers.Add('X-API-Key',$env:API_KEY); $f=New-Object System.Collections.Specialized.NameValueCollection; $f['equipo']=$env:COMPUTERNAME; if (Test-Path $env:REP_SISTEMA) { $f['reporte_sistema']=[IO.File]::ReadAllText($env:REP_SISTEMA,[Text.Encoding]::Default) }; if (Test-Path $env:REP_RED) { $f['reporte_red']=[IO.File]::ReadAllText($env:REP_RED,[Text.Encoding]::Default) }; if (Test-Path $env:REP_LOGS) { $f['reporte_logs']=[IO.File]::ReadAllText($env:REP_LOGS,[Text.Encoding]::Default) }; $b=$c.UploadValues($env:AUDIT_POST_URL,'POST',$f); [IO.File]::WriteAllText($env:AUDIT_POST_RESP,[Text.Encoding]::UTF8.GetString($b))"
 if !errorlevel! equ 0 (set "UPLOAD_CODE=201") else (set "UPLOAD_CODE=000")
 
 :subir_mostrar

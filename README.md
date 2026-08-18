@@ -24,6 +24,26 @@ $p = Join-Path $env:TEMP 'ejecutar_auditoria.bat'
 & $p
 ```
 
+En **Windows Server 2008/2008 R2** no existe `[Net.SecurityProtocolType]::Tls12` ni `Register-ScheduledTask`. Usa TLS por numero (3072) y `cmd /c`:
+
+```powershell
+$env:AUDIT_API_URL='https://api-tertius-auditoria.alvesc.com'
+$env:AUDIT_API_KEY='XXXXXXXXXXX'
+$p = Join-Path $env:TEMP 'ejecutar_auditoria.bat'
+[Net.ServicePointManager]::CheckCertificateRevocationList = $false
+[Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
+(New-Object Net.WebClient).DownloadFile(($env:AUDIT_API_URL + '/scripts/ejecutar_auditoria.bat'), $p)
+cmd /c "`"$p`""
+```
+
+Si falla con "Could not create SSL/TLS secure channel", el OS no habla TLS 1.2: instala SP2 y el hotfix [KB4019276](https://support.microsoft.com/help/4019276) (2008) o el equivalente de TLS 1.2 en 2008 R2. Sin eso un HTTPS moderno no va a conectar.
+
+En 2008 no existe `Register-ScheduledTask`. Crea la tarea con `schtasks` (una sola linea; sustituye URL y key):
+
+```
+schtasks /Create /TN "Auditoria_Programada" /SC DAILY /ST 03:00 /RU SYSTEM /RL HIGHEST /F /TR "powershell.exe -NoProfile -Command \"[Net.ServicePointManager]::CheckCertificateRevocationList=$false; [Net.ServicePointManager]::SecurityProtocol=[Enum]::ToObject([Net.SecurityProtocolType],3072); $env:AUDIT_API_URL='https://api-tertius-auditoria.alvesc.com'; $env:AUDIT_API_KEY='XXXXXXXXXXX'; $p=Join-Path $env:TEMP 'ejecutar_auditoria.bat'; (New-Object Net.WebClient).DownloadFile(($env:AUDIT_API_URL+'/scripts/ejecutar_auditoria.bat'),$p); cmd /c $p /silent\""
+```
+
 ### Tarea programada (SYSTEM)
 
 Igual que el manual, con `/silent` para que no se quede en un `pause`. Registrar la tarea **una vez** (PowerShell elevado). Cambia hora, URL y key:
