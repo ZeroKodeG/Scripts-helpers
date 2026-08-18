@@ -75,7 +75,7 @@ if exist "%DL_DEST%" del "%DL_DEST%" >nul 2>&1
 
 where /q curl.exe
 if !errorlevel! equ 0 (
-    curl -s -f -o "%DL_DEST%" "%DL_URL%"
+    curl -s -f --ssl-no-revoke -o "%DL_DEST%" "%DL_URL%"
     if !errorlevel! equ 0 if exist "%DL_DEST%" exit /b 0
 )
 
@@ -109,13 +109,14 @@ if exist "%REP_LOGS%" set "FORM_LOGS=--data-urlencode reporte_logs@%REP_LOGS%"
 
 where /q curl.exe
 if !errorlevel! neq 0 goto :subir_powershell
-for /f "delims=" %%C in ('curl.exe -sS -o "%UPLOAD_RESP%" -w "%%{http_code}" -X POST "%POST_URL%" -H "X-API-Key: %API_KEY%" --data-urlencode "equipo=%COMPUTERNAME%" !FORM_SISTEMA! !FORM_RED! !FORM_LOGS!') do set "UPLOAD_CODE=%%C"
-goto :subir_mostrar
+for /f "delims=" %%C in ('curl.exe -sS --ssl-no-revoke -o "%UPLOAD_RESP%" -w "%%{http_code}" -X POST "%POST_URL%" -H "X-API-Key: %API_KEY%" --data-urlencode "equipo=%COMPUTERNAME%" !FORM_SISTEMA! !FORM_RED! !FORM_LOGS! 2^>nul') do set "UPLOAD_CODE=%%C"
+if not "!UPLOAD_CODE!"=="000" if not "!UPLOAD_CODE!"=="" goto :subir_mostrar
+echo     curl no pudo completar TLS; reintentando con PowerShell...
 
 :subir_powershell
 set "AUDIT_POST_URL=%POST_URL%"
 set "AUDIT_POST_RESP=%UPLOAD_RESP%"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $c = New-Object Net.WebClient; $c.Headers.Add('X-API-Key', $env:API_KEY); $f = New-Object System.Collections.Specialized.NameValueCollection; $f['equipo'] = $env:COMPUTERNAME; if (Test-Path $env:REP_SISTEMA) { $f['reporte_sistema'] = [IO.File]::ReadAllText($env:REP_SISTEMA) }; if (Test-Path $env:REP_RED) { $f['reporte_red'] = [IO.File]::ReadAllText($env:REP_RED) }; if (Test-Path $env:REP_LOGS) { $f['reporte_logs'] = [IO.File]::ReadAllText($env:REP_LOGS) }; $b = $c.UploadValues($env:AUDIT_POST_URL, 'POST', $f); [IO.File]::WriteAllText($env:AUDIT_POST_RESP, [Text.Encoding]::UTF8.GetString($b)) } catch { [IO.File]::WriteAllText($env:AUDIT_POST_RESP, $_.Exception.Message); throw }"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; [Net.ServicePointManager]::CheckCertificateRevocationList = $false; $c = New-Object Net.WebClient; $c.Headers.Add('X-API-Key', $env:API_KEY); $f = New-Object System.Collections.Specialized.NameValueCollection; $f['equipo'] = $env:COMPUTERNAME; if (Test-Path $env:REP_SISTEMA) { $f['reporte_sistema'] = [IO.File]::ReadAllText($env:REP_SISTEMA) }; if (Test-Path $env:REP_RED) { $f['reporte_red'] = [IO.File]::ReadAllText($env:REP_RED) }; if (Test-Path $env:REP_LOGS) { $f['reporte_logs'] = [IO.File]::ReadAllText($env:REP_LOGS) }; $b = $c.UploadValues($env:AUDIT_POST_URL, 'POST', $f); [IO.File]::WriteAllText($env:AUDIT_POST_RESP, [Text.Encoding]::UTF8.GetString($b)) } catch { [IO.File]::WriteAllText($env:AUDIT_POST_RESP, $_.Exception.Message); throw }"
 if !errorlevel! equ 0 (set "UPLOAD_CODE=201") else (set "UPLOAD_CODE=000")
 
 :subir_mostrar
