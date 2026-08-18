@@ -47,8 +47,10 @@ exit /b
 :inicio
 title Auditoria Red [2/3]
 
+if not defined AUDIT_DIR set "AUDIT_DIR=C:\Auditoria_Programada"
+if not exist "%AUDIT_DIR%" mkdir "%AUDIT_DIR%"
 set "REPORTE=%TEMP%\AuditRed_%COMPUTERNAME%_%RANDOM%.txt"
-set "REPORTE_FINAL=%USERPROFILE%\Desktop\Reporte_Red_CMD.txt"
+set "REPORTE_FINAL=%AUDIT_DIR%\Reporte_Red_CMD.txt"
 set "FECHA=%DATE% %TIME%"
 set "SUBNET_BASE="
 set "LOCAL_IP="

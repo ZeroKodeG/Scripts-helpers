@@ -35,8 +35,10 @@ exit /b
 :inicio
 title Auditoria Logs [3/3]
 
+if not defined AUDIT_DIR set "AUDIT_DIR=C:\Auditoria_Programada"
+if not exist "%AUDIT_DIR%" mkdir "%AUDIT_DIR%"
 set "REPORTE=%TEMP%\AuditLogs_%COMPUTERNAME%_%RANDOM%.txt"
-set "REPORTE_FINAL=%USERPROFILE%\Desktop\Reporte_Logs_CMD.txt"
+set "REPORTE_FINAL=%AUDIT_DIR%\Reporte_Logs_CMD.txt"
 set "FECHA=%DATE% %TIME%"
 
 call :verificar_admin

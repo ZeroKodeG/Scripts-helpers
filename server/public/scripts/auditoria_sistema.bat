@@ -45,9 +45,11 @@ set "DEBUG="
 set "MODO_SILENCIOSO=0"
 if /i "%1"=="/silent" set "MODO_SILENCIOSO=1"
 if /i "%1"=="/debug" set "DEBUG=1"
+if not defined AUDIT_DIR set "AUDIT_DIR=C:\Auditoria_Programada"
+if not exist "%AUDIT_DIR%" mkdir "%AUDIT_DIR%"
 set "REPORTE=%TEMP%\AuditSistema_%COMPUTERNAME%_%RANDOM%.txt"
-set "REPORTE_FINAL=%USERPROFILE%\Desktop\Reporte_Sistema_CMD.txt"
-set "LOG=%USERPROFILE%\Desktop\Auditoria_Sistema_LOG.txt"
+set "REPORTE_FINAL=%AUDIT_DIR%\Reporte_Sistema_CMD.txt"
+set "LOG=%AUDIT_DIR%\Auditoria_Sistema_LOG.txt"
 set "FECHA=%DATE% %TIME%"
 del "%LOG%" >nul 2>&1
 call :log "=== INICIO AUDITORIA SISTEMA ==="
@@ -164,12 +166,12 @@ call :resumen_sistema
 >>"%REPORTE%" echo     FIN REPORTE SISTEMA - modulo 1 de 3
 >>"%REPORTE%" echo =========================================
 >>"%REPORTE%" echo Generado: %FECHA%
-call :log "=== FIN - copiando reporte al Escritorio ==="
+call :log "=== FIN - copiando reporte a %AUDIT_DIR% ==="
 copy /y "%REPORTE%" "%REPORTE_FINAL%" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] No se pudo copiar al Escritorio. Cierre Notepad si tiene abierto el reporte.
+    echo [ERROR] No se pudo copiar a %AUDIT_DIR%. Cierre Notepad si tiene abierto el reporte.
     echo Reporte temporal: %REPORTE%
-    call :log "ERROR al copiar al Escritorio"
+    call :log "ERROR al copiar a %AUDIT_DIR%"
 ) else (
     echo Listo: %REPORTE_FINAL%
     call :log "Reporte copiado OK"

@@ -7,18 +7,39 @@ Auditoria de servidores Windows centralizada en un backend propio:
 
 ## Uso rapido en un servidor
 
-1. Configura una vez por equipo (nunca en el repo):
-   - Variables de entorno `AUDIT_API_KEY` y `AUDIT_API_URL`, o
-   - Archivo `%USERPROFILE%\.audit_config`:
-     ```
-     API_KEY=tu-api-key
-     API_URL=https://tu-backend.tld
-     ```
-2. Ejecuta como Administrador (reemplaza la URL por tu backend):
-   ```
-   curl -s -o "%TEMP%\ejecutar_auditoria.bat" https://tu-backend.tld/scripts/ejecutar_auditoria.bat && "%TEMP%\ejecutar_auditoria.bat"
-   ```
-   Esto descarga (desde el propio backend) y corre los 3 modulos (`auditoria_sistema.bat`, `auditoria_red.bat`, `auditoria_logs.bat`), deja los `.txt` en el Escritorio, y sube los 3 reportes al backend via API key.
+Los reportes viven en `C:\Auditoria_Programada` (no en el perfil del usuario), para poder correr como tarea programada bajo SYSTEM. El orquestador crea la carpeta si no existe. Opcional: `AUDIT_DIR` para otra ruta.
+
+La API key se pasa por variables de entorno **del proceso** (`AUDIT_API_KEY` / `AUDIT_API_URL`) o, si no estan, por `C:\Auditoria_Programada\.audit_config` (ACL SYSTEM + Administrators).
+
+### Manual (PowerShell como Administrador)
+
+El mismo flujo que ya usas; los `.txt` quedan en `C:\Auditoria_Programada` (no en el Escritorio):
+
+```powershell
+$env:AUDIT_API_URL='https://api-tertius-auditoria.alvesc.com'
+$env:AUDIT_API_KEY='XXXXXXXXXXX'
+$p = Join-Path $env:TEMP 'ejecutar_auditoria.bat'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+(New-Object Net.WebClient).DownloadFile(($env:AUDIT_API_URL + '/scripts/ejecutar_auditoria.bat'), $p)
+& $p
+```
+
+### Tarea programada (SYSTEM)
+
+Igual que el manual, con `/silent` para que no se quede en un `pause`. Registrar la tarea **una vez** (PowerShell elevado). Cambia hora, URL y key:
+
+```powershell
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument @'
+-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$env:AUDIT_API_URL='https://api-tertius-auditoria.alvesc.com'; $env:AUDIT_API_KEY='XXXXXXXXXXX'; $p=Join-Path $env:TEMP 'ejecutar_auditoria.bat'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile(($env:AUDIT_API_URL + '/scripts/ejecutar_auditoria.bat'), $p); & $p /silent"
+'@
+$trigger = New-ScheduledTaskTrigger -Daily -At 03:00
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+Register-ScheduledTask -TaskName 'Auditoria_Programada' -Action $action -Trigger $trigger -Principal $principal -Force
+```
+
+- Usuario: `SYSTEM`, "Ejecutar aunque el usuario no haya iniciado sesion"
+- La key viaja en el comando de la tarea (solo admins la ven con `Get-ScheduledTaskInfo` / Task Scheduler)
+- Si el equipo sale a internet con proxy autenticado por usuario, SYSTEM puede no tener salida; usar proxy/PAC de maquina
 
 Ver `CLAUDE.md` para el detalle de cada script y las convenciones de edicion.
 
