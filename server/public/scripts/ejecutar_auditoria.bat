@@ -58,7 +58,6 @@ exit /b
 del "%TMP_SISTEMA%" >nul 2>&1
 del "%TMP_RED%" >nul 2>&1
 del "%TMP_LOGS%" >nul 2>&1
-del "%UPLOAD_SCRIPT%" >nul 2>&1
 del "%UPLOAD_RESP%" >nul 2>&1
 exit /b
 
@@ -92,63 +91,39 @@ if exist "%DL_DEST%" exit /b 0
 exit /b 1
 
 :subir_reportes
-set "UPLOAD_SCRIPT=%TEMP%\audit_upload_%RANDOM%.ps1"
 set "UPLOAD_RESP=%TEMP%\audit_upload_response.txt"
-del "%UPLOAD_SCRIPT%" >nul 2>&1
+set "UPLOAD_CODE=000"
 del "%UPLOAD_RESP%" >nul 2>&1
 
->"%UPLOAD_SCRIPT%" echo param(
->>"%UPLOAD_SCRIPT%" echo     [string]$ApiUrl,
->>"%UPLOAD_SCRIPT%" echo     [string]$ApiKey,
->>"%UPLOAD_SCRIPT%" echo     [string]$Equipo,
->>"%UPLOAD_SCRIPT%" echo     [string]$RepSistema,
->>"%UPLOAD_SCRIPT%" echo     [string]$RepRed,
->>"%UPLOAD_SCRIPT%" echo     [string]$RepLogs,
->>"%UPLOAD_SCRIPT%" echo     [string]$ResponsePath
->>"%UPLOAD_SCRIPT%" echo ^)
->>"%UPLOAD_SCRIPT%" echo $ErrorActionPreference = 'Stop'
->>"%UPLOAD_SCRIPT%" echo [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
->>"%UPLOAD_SCRIPT%" echo function Add-TextField {
->>"%UPLOAD_SCRIPT%" echo     param([System.Collections.Specialized.NameValueCollection]$Form, [string]$Name, [string]$Path)
->>"%UPLOAD_SCRIPT%" echo     if (Test-Path $Path) {
->>"%UPLOAD_SCRIPT%" echo         $Form[$Name] = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::Default)
->>"%UPLOAD_SCRIPT%" echo     }
->>"%UPLOAD_SCRIPT%" echo }
->>"%UPLOAD_SCRIPT%" echo try {
->>"%UPLOAD_SCRIPT%" echo     $Client = New-Object System.Net.WebClient
->>"%UPLOAD_SCRIPT%" echo     $Client.Headers.Add('X-API-Key', $ApiKey)
->>"%UPLOAD_SCRIPT%" echo     $Form = New-Object System.Collections.Specialized.NameValueCollection
->>"%UPLOAD_SCRIPT%" echo     $Form['equipo'] = $Equipo
->>"%UPLOAD_SCRIPT%" echo     Add-TextField $Form 'reporte_sistema' $RepSistema
->>"%UPLOAD_SCRIPT%" echo     Add-TextField $Form 'reporte_red' $RepRed
->>"%UPLOAD_SCRIPT%" echo     Add-TextField $Form 'reporte_logs' $RepLogs
->>"%UPLOAD_SCRIPT%" echo     $Url = $ApiUrl.TrimEnd('/') + '/api/reportes'
->>"%UPLOAD_SCRIPT%" echo     $Bytes = $Client.UploadValues($Url, 'POST', $Form)
->>"%UPLOAD_SCRIPT%" echo     $Body = [System.Text.Encoding]::UTF8.GetString($Bytes)
->>"%UPLOAD_SCRIPT%" echo     [System.IO.File]::WriteAllText($ResponsePath, ('HTTP 201' + [Environment]::NewLine + $Body))
->>"%UPLOAD_SCRIPT%" echo     exit 0
->>"%UPLOAD_SCRIPT%" echo } catch [System.Net.WebException] {
->>"%UPLOAD_SCRIPT%" echo     $Code = 'ERROR'
->>"%UPLOAD_SCRIPT%" echo     $Body = ''
->>"%UPLOAD_SCRIPT%" echo     if ($_.Exception.Response -ne $null) {
->>"%UPLOAD_SCRIPT%" echo         $Code = [int]$_.Exception.Response.StatusCode
->>"%UPLOAD_SCRIPT%" echo         $Reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
->>"%UPLOAD_SCRIPT%" echo         $Body = $Reader.ReadToEnd()
->>"%UPLOAD_SCRIPT%" echo         $Reader.Close()
->>"%UPLOAD_SCRIPT%" echo     }
->>"%UPLOAD_SCRIPT%" echo     [System.IO.File]::WriteAllText($ResponsePath, ('HTTP ' + $Code + [Environment]::NewLine + $Body + [Environment]::NewLine + $_.Exception.Message))
->>"%UPLOAD_SCRIPT%" echo     exit 1
->>"%UPLOAD_SCRIPT%" echo } catch {
->>"%UPLOAD_SCRIPT%" echo     [System.IO.File]::WriteAllText($ResponsePath, ('[ERROR] ' + $_.Exception.Message))
->>"%UPLOAD_SCRIPT%" echo     exit 1
->>"%UPLOAD_SCRIPT%" echo }
+set "POST_URL=%API_URL%"
+if "%POST_URL:~-1%"=="/" set "POST_URL=%POST_URL:~0,-1%"
+set "POST_URL=%POST_URL%/api/reportes"
+echo     Destino: %POST_URL%
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%UPLOAD_SCRIPT%" "%API_URL%" "%API_KEY%" "%COMPUTERNAME%" "%REP_SISTEMA%" "%REP_RED%" "%REP_LOGS%" "%UPLOAD_RESP%"
-set "UPLOAD_EXIT=%errorlevel%"
+set "FORM_SISTEMA="
+set "FORM_RED="
+set "FORM_LOGS="
+if exist "%REP_SISTEMA%" set "FORM_SISTEMA=--data-urlencode reporte_sistema@%REP_SISTEMA%"
+if exist "%REP_RED%" set "FORM_RED=--data-urlencode reporte_red@%REP_RED%"
+if exist "%REP_LOGS%" set "FORM_LOGS=--data-urlencode reporte_logs@%REP_LOGS%"
 
+where /q curl.exe
+if !errorlevel! neq 0 goto :subir_powershell
+for /f "delims=" %%C in ('curl.exe -sS -o "%UPLOAD_RESP%" -w "%%{http_code}" -X POST "%POST_URL%" -H "X-API-Key: %API_KEY%" --data-urlencode "equipo=%COMPUTERNAME%" !FORM_SISTEMA! !FORM_RED! !FORM_LOGS!') do set "UPLOAD_CODE=%%C"
+goto :subir_mostrar
+
+:subir_powershell
+set "AUDIT_POST_URL=%POST_URL%"
+set "AUDIT_POST_RESP=%UPLOAD_RESP%"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $c = New-Object Net.WebClient; $c.Headers.Add('X-API-Key', $env:API_KEY); $f = New-Object System.Collections.Specialized.NameValueCollection; $f['equipo'] = $env:COMPUTERNAME; if (Test-Path $env:REP_SISTEMA) { $f['reporte_sistema'] = [IO.File]::ReadAllText($env:REP_SISTEMA) }; if (Test-Path $env:REP_RED) { $f['reporte_red'] = [IO.File]::ReadAllText($env:REP_RED) }; if (Test-Path $env:REP_LOGS) { $f['reporte_logs'] = [IO.File]::ReadAllText($env:REP_LOGS) }; $b = $c.UploadValues($env:AUDIT_POST_URL, 'POST', $f); [IO.File]::WriteAllText($env:AUDIT_POST_RESP, [Text.Encoding]::UTF8.GetString($b)) } catch { [IO.File]::WriteAllText($env:AUDIT_POST_RESP, $_.Exception.Message); throw }"
+if !errorlevel! equ 0 (set "UPLOAD_CODE=201") else (set "UPLOAD_CODE=000")
+
+:subir_mostrar
+echo     HTTP !UPLOAD_CODE!
 if exist "%UPLOAD_RESP%" type "%UPLOAD_RESP%"
-
-exit /b %UPLOAD_EXIT%
+echo.
+if "!UPLOAD_CODE!"=="201" exit /b 0
+exit /b 1
 
 :inicio
 title Auditoria Completa - Descargando y ejecutando modulos...
@@ -158,7 +133,6 @@ if /i "%~1"=="/silent" set "MODO_SILENCIOSO=1"
 
 set "API_KEY="
 set "API_URL="
-set "UPLOAD_SCRIPT="
 set "UPLOAD_RESP="
 
 call :asegurar_directorio
