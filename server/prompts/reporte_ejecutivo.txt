@@ -45,11 +45,13 @@ REGLAS ESTRICTAS
 3. No debes cambiar los nombres de las secciones.
 4. No debes agregar secciones fuera del catalogo permitido.
 5. La seccion final `hallazgos_y_recomendaciones` es obligatoria y siempre debe existir.
-6. Las secciones 1-9 pueden quedar ausentes o vacias si no hay datos suficientes.
-7. Los hallazgos de la seccion final deben consolidar problemas de seguridad, configuracion, red, cuentas, servicios y logs.
+6. Las secciones 1-9 pueden quedar ausentes o vacias SOLO si no hay datos en los txt. Si hay evidencia, no las omitas.
+7. Los hallazgos de la seccion final deben consolidar problemas de seguridad, configuracion, red, cuentas, privilegios, servicios, software y logs.
 8. No pongas tablas renderizadas ni estilos visuales; solo estructura de datos.
 9. Toda evidencia debe derivarse de los `.txt` fuente. No inventes datos.
 10. Si dos sintomas apuntan al mismo problema accionable, puedes consolidarlos en un solo hallazgo.
+11. Este reporte lo analiza TI buscando brechas y permisos mal aplicados. Prefiere tablas completas a resúmenes numéricos.
+12. En `cuentas_privilegios`, `superficie_exposicion` y `recursos_y_servicios` esta prohibido reducir el inventario a un conteo ("12 usuarios", "8 puertos"). Hay que tabular cada dato.
 
 ===================================================
 CATALOGO DE SECCIONES PERMITIDAS
@@ -156,7 +158,47 @@ Para `resumen_ejecutivo`:
 - Incluye siempre que haya evidencia una tabla de indicadores con columnas
   `Indicador`, `Valor` y `Estado`.
 - Los indicadores deben ser de auditoria (licencia del SO, firewall, RDP, cuentas privilegiadas,
-  perfiles de usuario, logons fallidos 4625, puertos en escucha, etc.), no KPIs genericos de operaciones.
+  Guest habilitado, puertos de aplicativo en 0.0.0.0, logons fallidos 4625, etc.), no KPIs genericos.
+
+Para `cuentas_privilegios` (obligatorio si hay evidencia; exhaustivo):
+- Tabla `Cuentas locales` con una fila por cuenta. Columnas sugeridas:
+  `Cuenta`, `Habilitada`, `Bloqueada`, `PasswordRequired`, `PasswordExpires`, `SID`, `Grupos locales`, `Privilegiada`.
+  `Privilegiada` = SI si pertenece a Administrators, Backup Operators, Remote Desktop Users,
+  Remote Management Users, Power Users, Hyper-V Administrators o equivalente localizado.
+- Tabla `Grupos locales` con una fila por grupo y columna `Miembros` (lista completa, no "varios").
+- Tabla `Derechos de usuario (secedit)` con una fila por derecho. Columnas:
+  `Derecho`, `Asignado a` (nombres o SID), `Riesgo`.
+  Marca Riesgo=`Critico` en SeTcbPrivilege, SeDebugPrivilege, SeCreateTokenPrivilege,
+  SeAssignPrimaryTokenPrivilege, SeLoadDriverPrivilege, SeRestorePrivilege, SeBackupPrivilege,
+  SeTakeOwnershipPrivilege, SeImpersonatePrivilege, SeEnableDelegationPrivilege, SeSecurityPrivilege
+  cuando el asignado no sea un grupo o cuenta de servicio esperable de Windows.
+- Tabla `Domain Admins` si el txt la trae.
+- Incluye Guest, DefaultAccount, WDAGUtilityAccount y cuentas deshabilitadas; no las filtres.
+- Cruza `net user <cuenta>` (membresias) con USER_RIGHTS (SID) usando la leyenda S-1-5-32-* del txt.
+
+Para `superficie_exposicion` (exhaustivo):
+- Tabla `Puertos conocidos detectados` con una fila por hallazgo de la seccion
+  `SERVICIOS POR PUERTO CONOCIDO`. Columnas:
+  `Puerto`, `Rol`, `Direccion local`, `PID`, `Proceso`, `Exposicion`.
+  `Exposicion` = `Todas las interfaces` si es 0.0.0.0 o [::], `Solo local` si es 127.0.0.1 o [::1],
+  `LAN` si es una IP de la maquina.
+- Tabla adicional `Otros puertos en escucha` para LISTENING que no esten en la lista conocida.
+- No omitas MSSQL 1433, HTTP/HTTPS 80/443/8080/8443, MySQL 3306, PostgreSQL 5432, RDP 3389,
+  SMB 445, WinRM 5985/5986, VNC 5900, SSH 22, Oracle 1521, Mongo 27017 si aparecen.
+
+Para `recursos_y_servicios` (exhaustivo):
+- Tabla `Software instalado` con una fila por linea `[APP]` del registro Uninstall:
+  `Nombre`, `Version`, `Publisher`.
+- Tabla `Servicios` desde el inventario WMI. Columnas:
+  `Name`, `DisplayName`, `State`, `StartMode`, `StartName`, `PathName`, `Notas`.
+  Incluye todos los que no sean Microsoft/Windows, todos Auto con cuenta distinta de
+  LocalSystem/LocalService/NetworkService, y todos con PathName sin comillas y con espacios.
+  El resto de servicios Windows en ejecucion puede ir en una segunda tabla resumida, pero
+  no borres los de aplicativo.
+- Tabla `Procesos de aplicativo` con las coincidencias (sqlservr, w3wp, httpd, nginx, java,
+  node, mysqld, postgres, tomcat, docker, TeamViewer, AnyDesk, VNC, sshd, etc.).
+- Tabla `Recursos compartidos` desde `net share`.
+- Identifica el rol del equipo cuando haya evidencia: servidor SQL, IIS/web, fileserver, RDP, etc.
 
 Para la seccion `hallazgos_y_recomendaciones`:
 - Siempre debe existir.
@@ -181,13 +223,21 @@ MAPEO RECOMENDADO DESDE LOS TXT
 Mapea el contenido de los scripts a las secciones canonicas de esta forma:
 
 - Informacion general, hardware, sistema operativo, estado de licencia del SO (slmgr /dli /xpr, LicenseStatus), parches, uptime -> `informacion_sistema`
-- Cuentas locales, usuarios y perfiles (ProfileList, carpetas en Users, sesiones activas), Administrators, Domain Admins -> `cuentas_privilegios`
-- Contrasenas, firewall, RDP, SMB, UAC, GPO de seguridad -> `politicas_seguridad`
+- Cuentas locales, detalle `net user` por cuenta, grupos locales y miembros, secedit USER_RIGHTS, SID, perfiles, sesiones, Administrators, Domain Admins, whoami /all -> `cuentas_privilegios`
+- Contrasenas (`net accounts`), firewall, RDP, SMB, UAC, GPO de seguridad -> `politicas_seguridad`
 - IP, DNS, gateway, rutas, ARP, resolucion -> `configuracion_red`
-- Puertos en escucha, conexiones establecidas, destinos remotos -> `superficie_exposicion`
-- Recursos compartidos, servicios, procesos relevantes -> `recursos_y_servicios`
+- Puertos conocidos (1433, 80, 443, 8080, 3306, 5432, 3389, etc.), netstat LISTENING, 0.0.0.0 vs 127.0.0.1, conexiones establecidas -> `superficie_exposicion`
+- Uninstall [APP], wmic service, sc query state= all, procesos de aplicativo, net share -> `recursos_y_servicios`
 - Eventos 4624, 4625, 4648, 4672 y similares -> `eventos_autenticacion`
 - Errores System/Application, 7045, 6008/41, configuracion de logs -> `errores_y_logs`
+
+Hallazgos que debes buscar de forma explicita (si hay evidencia):
+- Guest u otras cuentas habilitadas sin necesidad; Administrators con miembros de mas
+- Derechos sensibles asignados a Users, Everyone o cuentas no administrativas
+- SQL, web, MySQL, Postgres u otro aplicativo escuchando en 0.0.0.0
+- Servicio Auto con cuenta de dominio o PathName sin comillas
+- Software remoto (TeamViewer, AnyDesk, VNC) o web/DB instalado y en ejecucion
+- Shares no administrativos (no ADMIN$, C$, IPC$) con nombres inesperados
 
 ===================================================
 SALIDA FINAL

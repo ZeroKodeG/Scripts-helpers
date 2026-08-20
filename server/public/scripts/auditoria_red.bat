@@ -17,6 +17,27 @@ if %errorlevel% neq 0 (
 )
 exit /b
 
+:puerto_conocido
+set "PTO=%~1"
+set "ROL=%~2"
+>>"%REPORTE%" echo ----- Puerto %PTO% (%ROL%) -----
+set "HIT="
+for /f "tokens=1,2,3,4,5" %%A in ('netstat -ano 2^>nul ^| findstr /c:":%PTO% "') do (
+    if /i "%%D"=="LISTENING" (
+        set "HIT=1"
+        >>"%REPORTE%" echo %%A  %%B  %%C  LISTENING  PID=%%E
+        if not "%%E"=="" tasklist /fi "PID eq %%E" /fo list >>"%REPORTE%" 2>&1
+    )
+    if /i "%%A"=="UDP" (
+        set "HIT=1"
+        >>"%REPORTE%" echo %%A  %%B  %%C  PID=%%D
+        if not "%%D"=="" tasklist /fi "PID eq %%D" /fo list >>"%REPORTE%" 2>&1
+    )
+)
+if not defined HIT >>"%REPORTE%" echo (no hay LISTENING ni UDP en puerto %PTO%)
+>>"%REPORTE%" echo.
+exit /b
+
 :detectar_subred
 for /f "tokens=* delims=:" %%a in ('ipconfig ^| findstr /i /c:"IPv4"') do (
     set "IPLINE=%%a"
@@ -62,6 +83,7 @@ echo [2/3] Generando reporte de RED...
 >>"%REPORTE%" echo Fecha: %FECHA%
 >>"%REPORTE%" echo Equipo: %COMPUTERNAME%
 >>"%REPORTE%" echo Usuario: %USERNAME%
+>>"%REPORTE%" echo Version script: 2026-08-20a
 >>"%REPORTE%" echo.
 
 call :detectar_subred
@@ -88,6 +110,43 @@ netstat -nab 2>nul | findstr /i "LISTENING" >>"%REPORTE%" 2>&1
 
 call :seccion "[+] PUERTOS Y PROCESOS ASOCIADOS"
 netstat -anb 2>nul | findstr /i "LISTENING UDP" >>"%REPORTE%" 2>&1
+
+call :seccion "[+] SERVICIOS POR PUERTO CONOCIDO"
+>>"%REPORTE%" echo 0.0.0.0 y [::] = escucha en todas las interfaces (expuesto a la red).
+>>"%REPORTE%" echo 127.0.0.1 y [::1] = solo local. Una IP LAN = exposicion interna.
+>>"%REPORTE%" echo Cruzar PID con tasklist de esta seccion y con procesos de aplicativo del modulo sistema.
+call :puerto_conocido 21 "FTP"
+call :puerto_conocido 22 "SSH"
+call :puerto_conocido 23 "Telnet"
+call :puerto_conocido 25 "SMTP"
+call :puerto_conocido 53 "DNS"
+call :puerto_conocido 80 "HTTP"
+call :puerto_conocido 110 "POP3"
+call :puerto_conocido 135 "RPC"
+call :puerto_conocido 139 "NetBIOS"
+call :puerto_conocido 143 "IMAP"
+call :puerto_conocido 389 "LDAP"
+call :puerto_conocido 443 "HTTPS"
+call :puerto_conocido 445 "SMB"
+call :puerto_conocido 465 "SMTPS"
+call :puerto_conocido 587 "Submission"
+call :puerto_conocido 636 "LDAPS"
+call :puerto_conocido 993 "IMAPS"
+call :puerto_conocido 1433 "MSSQL"
+call :puerto_conocido 1434 "MSSQL Browser"
+call :puerto_conocido 1521 "Oracle"
+call :puerto_conocido 3306 "MySQL MariaDB"
+call :puerto_conocido 3389 "RDP"
+call :puerto_conocido 5432 "PostgreSQL"
+call :puerto_conocido 5672 "AMQP RabbitMQ"
+call :puerto_conocido 5900 "VNC"
+call :puerto_conocido 5985 "WinRM HTTP"
+call :puerto_conocido 5986 "WinRM HTTPS"
+call :puerto_conocido 6379 "Redis"
+call :puerto_conocido 8080 "HTTP alt"
+call :puerto_conocido 8443 "HTTPS alt"
+call :puerto_conocido 9200 "Elasticsearch"
+call :puerto_conocido 27017 "MongoDB"
 
 call :seccion "[+] TOTAL DE CONEXIONES ESTABLECIDAS"
 for /f %%C in ('netstat -nab 2^>nul ^| findstr /i "ESTABLISHED" ^| find /c /v ""') do >>"%REPORTE%" echo %%C
