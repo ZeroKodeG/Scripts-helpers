@@ -11,31 +11,15 @@ goto :inicio
 ::  Compatible con equipos que tengan curl.exe o solo PowerShell/certutil.
 ::
 ::  Configuracion (una sola vez por equipo), por cualquiera de estas 2 vias:
-::   1) Variables de entorno de sistema: AUDIT_API_KEY y AUDIT_API_URL
-::   2) Archivo local NO versionado: %AUDIT_DIR%\.audit_config
-::      (por defecto C:\Auditoria_Programada\.audit_config) con lineas:
+::   1) Variables de entorno: AUDIT_API_KEY y AUDIT_API_URL
+::   2) Archivo local NO versionado: %TEMP%\.audit_config con lineas:
 ::        API_KEY=tu-api-key
 ::        API_URL=https://tu-backend.tld
 ::
-::  AUDIT_DIR puede sobreescribirse por variable de entorno.
+::  Los reportes se escriben en %TEMP% (compatible con SYSTEM).
 ::  La API KEY NUNCA debe escribirse en este archivo: solo se usa para el
 ::  POST final de subida de reportes, no para descargar los modulos.
 :: =============================================================================
-
-:asegurar_directorio
-if not defined AUDIT_DIR set "AUDIT_DIR=C:\Auditoria_Programada"
-if not exist "%AUDIT_DIR%" (
-    mkdir "%AUDIT_DIR%"
-    icacls "%AUDIT_DIR%" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" /grant:r "*S-1-5-32-544:(OI)(CI)F" >nul 2>&1
-)
-call :proteger_config
-exit /b
-
-:proteger_config
-if exist "%AUDIT_DIR%\.audit_config" (
-    icacls "%AUDIT_DIR%\.audit_config" /inheritance:r /grant:r "*S-1-5-18:F" /grant:r "*S-1-5-32-544:F" >nul 2>&1
-)
-exit /b
 
 :pausa_si_aplica
 if /i not "%MODO_SILENCIOSO%"=="1" pause
@@ -45,9 +29,8 @@ exit /b
 if defined AUDIT_API_KEY set "API_KEY=%AUDIT_API_KEY%"
 if defined AUDIT_API_URL set "API_URL=%AUDIT_API_URL%"
 
-if not defined API_KEY if exist "%AUDIT_DIR%\.audit_config" (
-    call :proteger_config
-    for /f "usebackq tokens=1,* delims==" %%A in ("%AUDIT_DIR%\.audit_config") do (
+if not defined API_KEY if exist "%TEMP%\.audit_config" (
+    for /f "usebackq tokens=1,* delims==" %%A in ("%TEMP%\.audit_config") do (
         if /i "%%A"=="API_KEY" set "API_KEY=%%B"
         if /i "%%A"=="API_URL" set "API_URL=%%B"
     )
@@ -136,20 +119,19 @@ set "API_KEY="
 set "API_URL="
 set "UPLOAD_RESP="
 
-call :asegurar_directorio
 call :cargar_config
 
 if not defined API_KEY (
     echo [ERROR] No se encontro la API KEY.
     echo         Definila con la variable de entorno AUDIT_API_KEY, o crea
-    echo         %AUDIT_DIR%\.audit_config con una linea API_KEY=tu-api-key
+    echo         %TEMP%\.audit_config con una linea API_KEY=tu-api-key
     call :pausa_si_aplica
     exit /b 1
 )
 if not defined API_URL (
     echo [ERROR] No se encontro la URL del backend.
     echo         Definila con la variable de entorno AUDIT_API_URL, o agrega
-    echo         una linea API_URL=https://tu-backend.tld a %AUDIT_DIR%\.audit_config
+    echo         una linea API_URL=https://tu-backend.tld a %TEMP%\.audit_config
     call :pausa_si_aplica
     exit /b 1
 )
@@ -157,10 +139,10 @@ if not defined API_URL (
 set "TMP_SISTEMA=%TEMP%\auditoria_sistema_%RANDOM%.bat"
 set "TMP_RED=%TEMP%\auditoria_red_%RANDOM%.bat"
 set "TMP_LOGS=%TEMP%\auditoria_logs_%RANDOM%.bat"
-set "REP_SISTEMA=%AUDIT_DIR%\Reporte_Sistema_CMD.txt"
-set "REP_RED=%AUDIT_DIR%\Reporte_Red_CMD.txt"
-set "REP_LOGS=%AUDIT_DIR%\Reporte_Logs_CMD.txt"
-set "REP_LOG_SISTEMA=%AUDIT_DIR%\Auditoria_Sistema_LOG.txt"
+set "REP_SISTEMA=%TEMP%\Reporte_Sistema_CMD.txt"
+set "REP_RED=%TEMP%\Reporte_Red_CMD.txt"
+set "REP_LOGS=%TEMP%\Reporte_Logs_CMD.txt"
+set "REP_LOG_SISTEMA=%TEMP%\Auditoria_Sistema_LOG.txt"
 
 echo [1/5] Descargando modulos desde %API_URL%...
 call :descargar_archivo "%API_URL%/scripts/auditoria_sistema.bat" "%TMP_SISTEMA%"
@@ -205,7 +187,7 @@ if not exist "%REP_LOGS%" echo [AVISO] No se encontro %REP_LOGS%
 call :subir_reportes
 if errorlevel 1 (
     echo.
-    echo [ERROR] La subida al backend fallo. Los .txt se conservan en %AUDIT_DIR% para revision manual.
+    echo [ERROR] La subida al backend fallo. Los .txt se conservan en %TEMP% para revision manual.
     echo.
     call :limpiar_temporales
     call :pausa_si_aplica
@@ -216,7 +198,7 @@ call :limpiar_temporales
 call :limpiar_reportes
 
 echo.
-echo Listo. Reportes enviados a %API_URL% y archivos .txt eliminados de %AUDIT_DIR%.
+echo Listo. Reportes enviados a %API_URL% y archivos .txt eliminados de %TEMP%.
 echo.
 call :pausa_si_aplica
 exit /b 0

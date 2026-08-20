@@ -7,13 +7,9 @@ Auditoria de servidores Windows centralizada en un backend propio:
 
 ## Uso rapido en un servidor
 
-Los reportes viven en `C:\Auditoria_Programada` (no en el perfil del usuario), para poder correr como tarea programada bajo SYSTEM. El orquestador crea la carpeta si no existe. Opcional: `AUDIT_DIR` para otra ruta.
-
-La API key se pasa por variables de entorno **del proceso** (`AUDIT_API_KEY` / `AUDIT_API_URL`) o, si no estan, por `C:\Auditoria_Programada\.audit_config` (ACL SYSTEM + Administrators).
+Los reportes viven en `%TEMP%` (compatible con SYSTEM: suele ser `C:\Windows\Temp`). La API key se pasa por variables de entorno del proceso (`AUDIT_API_KEY` / `AUDIT_API_URL`) o, si no estan, por `%TEMP%\.audit_config`.
 
 ### Manual (PowerShell como Administrador)
-
-El mismo flujo que ya usas; los `.txt` quedan en `C:\Auditoria_Programada` (no en el Escritorio):
 
 ```powershell
 $env:AUDIT_API_URL='https://api-tertius-auditoria.alvesc.com'
